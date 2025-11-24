@@ -1,0 +1,109 @@
+"""
+Dify 工作流调用模块
+提供便捷的工作流调用函数
+"""
+
+from typing import Dict, Any
+from .base import create_dify_client
+
+
+def run_commentary_workflow(inputs: Dict[str, Any], user: str = "user") -> str:
+    """
+    运行 AI 解说工作流（commentary）
+    
+    如果 inputs 中包含 'short_copy' 或 'long_commentary' 且为字符串，会自动上传为文件
+    
+    Examples:
+        >>> from dify.workflows import run_commentary_workflow
+        >>> inputs = {
+        ...     "plot": "剧情简介...",
+        ...     "short_copy": "短文案内容...",
+        ...     "video_type": "都市爱情"
+        ... }
+        >>> text = run_commentary_workflow(inputs)
+        >>> print(text)
+    """
+    # 创建 commentary 工作流客户端
+    client = create_dify_client("commentary")
+    
+    # 如果 short_copy 是字符串，先上传为文件
+    if "short_copy" in inputs and isinstance(inputs["short_copy"], str):
+        text_content = inputs["short_copy"]
+        
+        # 统一换行符为 \r\n（Windows 格式）
+        text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
+        
+        # 上传文件
+        file_info = client.upload_file(text_content, filename="short_copy.txt", user=user)
+        
+        # 替换为文件对象（单个对象，不是列表）
+        inputs["short_copy"] = {
+            "type": "document",
+            "transfer_method": "local_file", 
+            "upload_file_id": file_info["id"]
+        }
+    
+    # 如果 long_commentary 是字符串，先上传为文件
+    if "long_commentary" in inputs and isinstance(inputs["long_commentary"], str):
+        text_content = inputs["long_commentary"]
+        
+        # 统一换行符为 \r\n（Windows 格式）
+        text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
+        
+        # 上传文件
+        file_info = client.upload_file(text_content, filename="long_commentary.txt", user=user)
+        
+        # 替换为文件对象（单个对象，不是列表）
+        inputs["long_commentary"] = {
+            "type": "document",
+            "transfer_method": "local_file", 
+            "upload_file_id": file_info["id"]
+        }
+    
+    # 调用工作流并返回生成的文本
+    result_text = client.run_workflow(inputs, user)
+    
+    return result_text
+
+
+def run_editing_workflow(inputs: Dict[str, Any], user: str = "abc-123") -> str:
+    """
+    运行 AI 剪辑工作流（editing）
+    
+    如果 inputs 中包含 'long_lines' 且为字符串，会自动上传为文件
+
+    Examples:
+        >>> from dify.workflows import run_editing_workflow
+        >>> inputs = {
+        ...     "long_lines": "这是一段长文本...",
+        ...     "split_num": 5
+        ... }
+        >>> text = run_editing_workflow(inputs)
+        >>> print(text)
+    """
+    # 创建 editing 工作流客户端
+    client = create_dify_client("editing")
+    
+    # 如果 long_lines 是字符串，先上传为文件
+    if "long_lines" in inputs and isinstance(inputs["long_lines"], str):
+        text_content = inputs["long_lines"]
+        
+        # 统一换行符为 \r\n（Windows 格式）
+        # 先将所有 \r\n 转换为 \n，然后统一转换为 \r\n
+        text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
+        
+        # 上传文件
+        file_info = client.upload_file(text_content, filename="input_lines.txt", user=user)
+        
+        # 替换为文件对象列表
+        inputs["long_lines"] = [{
+            "type": "document",
+            "transfer_method": "local_file", 
+            "upload_file_id": file_info["id"]
+        }]
+    
+    # 调用工作流并返回生成的文本
+    result_text = client.run_workflow(inputs, user)
+    
+    return result_text
+

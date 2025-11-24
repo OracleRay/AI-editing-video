@@ -1,0 +1,18 @@
+# ==================== Dify API 配置 ====================
+# Dify工作流配置，每个工作流有独立的API密钥
+
+# API基础URL（所有工作流共享）
+base_url: "http://172.17.3.122/v1"
+
+# 工作流配置（每个工作流有自己的API密钥）
+workflows:
+  commentary:
+    api_key: "app-qegymDpZ4BgiJqyGD2WDbTeS"
+    description: "AI解说_3min短视频_测试"
+  
+  editing:
+    api_key: "app-ZAjjUJut05hNuMHFMPTr2lIr"
+    description: "AI剪辑_测试"
+
+
+
