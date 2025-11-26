@@ -197,18 +197,16 @@ def edit_video(srt_file, video_file):
     if not concat_video_clips(clip_files, final_video):
         logger.error(f"  ❌ 视频拼接失败")
         return None
-    logger.info(f"  ✅ 拼接成功: {final_video}")
-    
+
     return final_video
 
 if __name__ == "__main__":
     import sys
 
     # 测试用的默认SRT文件路径
-    srt_file_path = "../resources/dst/srt_files/clip/test.txt"
+    srt_file_path = "../test/test.txt"
 
-    video_src = config.get("video.src")
-    video_src_path = config.get_absolute_path(video_src)
+    video_src_path = "C:/Users/leidc/Desktop/123/超级翁婿01.mp4"
     
     result = edit_video(srt_file_path, video_src_path)
     if result:

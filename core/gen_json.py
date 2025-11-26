@@ -1,14 +1,16 @@
+from datetime import datetime
 import json
 import re
 import os
 import uuid
 import subprocess
 import sys
+from pathlib import Path
 
 # 添加utils目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from services.tts_client import parse_srt as tts_parse_srt, process_subtitle, ensure_output_dir
-from utils.config_loader import get_config
+from utils.config_loader import get_config, get_workspace_path
 from utils.meta_json import *
 from utils.loggers import get_logger
 
@@ -316,3 +318,22 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
     
     logger.info(f"剪映项目文件已生成: {output_abs_dir}")
     logger.info(f"视频片段: {len(video_segments)} 个 | 音频片段: {len(audio_segments_with_track)} 个 | 总时长: {total_duration / 1000000:.2f} 秒")
+
+if __name__ == "__main__":
+    generate_audio_from_srt(
+        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/test.txt",
+        reference_audio="resources/src/audios/xiao_shuai/爆款小帅男声.MP3",
+        output_dir="C:/Users/leidc/Desktop/workspace/audios/test/",
+        model=config.get('tts.model'),
+        speed=config.get('tts.speed')
+    )
+    logger.info(f"✅ 音频生成完成!")
+
+    # 生成剪映项目文件
+    generate_capcut_project(
+        video_file="C:/Users/leidc/Desktop/workspace/videos/20251126_140212.mp4",
+        audio_pattern=str("C:/Users/leidc/Desktop/workspace/audios/test/" + Path(config.get('audio.pattern')).name),
+        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/test.txt",
+        output_dir="C:/Users/leidc/Desktop/workspace/json/test/"
+    )
+    logger.info(f"✅ 剪映项目生成完成!")
