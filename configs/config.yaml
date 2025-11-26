@@ -2,16 +2,16 @@
 video:
   # 视频文件路径
   src: "resources/src/videos/邻居也疯狂第4集.mp4"
-  temp: "resources/dst/videos/temp/"
-  output: "resources/dst/videos/"
+  temp: "videos/temp/"
+  output: "videos/"
   # 视频时长（由ffprobe动态获取）
   
 # ==================== 音频配置 ====================
 audio:
   # 音频文件命名模式（{:04d}会被替换为0001, 0002等）
-  pattern: "resources/dst/audios/{:04d}.mp3"
+  pattern: "audios/{:04d}.mp3"
   # 音频输出目录
-  output_dir: "resources/dst/audios"
+  output_dir: "audios"
 
 # ==================== 字幕配置 ====================
 srt_file:
@@ -21,7 +21,7 @@ srt_file:
 # ==================== 输出配置 ====================
 output:
   # 剪映项目JSON文件输出目录
-  json_dir: "resources/dst/json/jieShuo"
+  json_dir: "json/jieShuo"
 
 # ==================== FFmpeg配置 ====================
 ffmpeg:
@@ -33,7 +33,7 @@ ffmpeg:
 # ==================== TTS（文字转语音）配置 ====================
 tts:
   # 参考音频路径（用于声音克隆）
-  reference_audio: "resources/src/audios/xiao_shuai/爆款小帅男声.MP3"
+  reference_audio: "resources/src/audios/xiao_mei/爆款小美女声.MP3"
   # TTS模型名称
   model: "Index-TTS"
   # 音频倍速（1.0=原速，>1.0加快，<1.0减慢）
@@ -58,4 +58,9 @@ project:
     ratio: "16:9"
   # 帧率
   fps: 30
+
+# ==================== Workspace配置 ====================
+workspace:
+  # 基础工作目录
+  base_dir: "C:/Users/leidc/Desktop/workspace"
 

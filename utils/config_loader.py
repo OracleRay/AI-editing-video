@@ -133,6 +133,28 @@ class ConfigLoader:
         project_root = self.get_project_root()
         return str(project_root / relative_path)
 
+    def get_workspace_path(self, relative_path: str = "") -> Path:
+        """
+        获取工作空间根目录
+        
+        Args:
+            relative_path: 相对路径，如果提供则返回相对于此路径的绝对路径
+        
+        Returns:
+            工作空间根目录路径
+        """
+        workspace_base_dir = self.get("workspace.base_dir")
+        if not workspace_base_dir:
+            raise ValueError("配置文件中未找到 workspace.base_dir 配置")
+        
+        workspace_root = Path(workspace_base_dir)
+        if not workspace_root.exists():
+            workspace_root.mkdir(parents=True)
+        
+        if relative_path:
+            return workspace_root / relative_path
+        return workspace_root
+
 
 # 全局配置实例
 _global_config_loader = None
@@ -199,6 +221,20 @@ def get_absolute_path(relative_path: str) -> str:
         >>> abs_path = get_absolute_path("resources/dst/videos/final_clip.mp4")
     """
     return get_config().get_absolute_path(relative_path)
+
+
+def get_workspace_path(relative_path: str = "") -> Path:
+    """
+    快捷方式：获取工作空间根目录
+    
+    Args:
+        relative_path: 相对路径，如果提供则返回相对于此路径的绝对路径
+    
+    Examples:
+        >>> from utils.config_loader import get_workspace_path
+        >>> workspace_root = get_workspace_path()
+    """
+    return get_config().get_workspace_path(relative_path)
 
 
 if __name__ == "__main__":

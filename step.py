@@ -10,7 +10,7 @@ from dify.workflows import run_editing_workflow, run_commentary_workflow
 from utils.text_to_srt import text_to_srt
 from core.video_editing import edit_video
 from core.gen_json import generate_capcut_project, generate_audio_from_srt
-from utils.config_loader import get_config
+from utils.config_loader import get_config, get_workspace_path
 from services.video_to_audio import convert_video_to_audio
 from services.audio_to_subtitles import transcribe_audio, create_srt
 from utils.fresh_timeline import fresh_timeline
@@ -39,7 +39,7 @@ def step1_video_to_audio() -> Dict[str, Any]:
         包含 video_src_path 和 audio_output_path 的字典
     """
     logger.info("=" * 80)
-    logger.info("【步骤 1/9】将视频转换为音频...")
+    logger.info("【步骤 1/10】将视频转换为音频...")
     logger.info("=" * 80)
     
     # 获取原始视频路径
@@ -51,7 +51,7 @@ def step1_video_to_audio() -> Dict[str, Any]:
         raise FileNotFoundError(f"视频文件不存在: {video_src_path}")
     
     # 设置音频输出路径（与 videos 目录同级的 audios 目录）
-    audio_output_path = video_src_path.parent.parent / "audios" / f"{video_src_path.stem}.mp3"
+    audio_output_path = get_workspace_path("audios") / f"{video_src_path.stem}.mp3"
     audio_output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # 检查音频文件是否已存在
@@ -81,11 +81,11 @@ def step2_audio_to_subtitles(audio_output_path: Path, video_src_path: Path) -> D
         包含 srt_output_path, txt_output_path, original_text 的字典
     """
     logger.info("=" * 80)
-    logger.info("【步骤 2/9】将音频转换为字幕...")
+    logger.info("【步骤 2/10】将音频转换为字幕...")
     logger.info("=" * 80)
     
     # 设置字幕输出路径
-    srt_output_path = video_src_path.parent.parent / "srt_files" / f"{video_src_path.stem}.txt"
+    srt_output_path = get_workspace_path("srt_files") / f"{video_src_path.stem}.txt"
     srt_output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # 检查字幕文件和文本文件是否已存在
@@ -99,9 +99,7 @@ def step2_audio_to_subtitles(audio_output_path: Path, video_src_path: Path) -> D
         
         # 生成SRT字幕文件
         create_srt(transcription_result, str(srt_output_path))
-
-        logger.info(f"✅ 音频转字幕完成:")
-        logger.info(f"   - SRT: {srt_output_path}")
+        logger.info(f"✅ 音频转字幕完成: {srt_output_path}")
 
     # 读取生成的文本内容，作为AI工作流的输入
     with open(srt_output_path, 'r', encoding='utf-8') as f:
@@ -125,7 +123,7 @@ def step3_ai_editing_workflow(original_text: str) -> str:
         AI 生成的剪辑文本
     """
     logger.info("=" * 80)
-    logger.info("【步骤 3/9】运行 AI 剪辑工作流...")
+    logger.info("【步骤 3/10】运行 AI 剪辑工作流...")
     logger.info("=" * 80)
 
     # 准备剪辑工作流的输入参数
@@ -151,12 +149,12 @@ def step4_editing_text_to_srt(editing_text: str) -> str:
         剪辑 SRT 文件路径
     """
     logger.info("=" * 80)
-    logger.info("【步骤 4/9】将剪辑文本转换为 SRT 字幕文件...")
+    logger.info("【步骤 4/10】将剪辑文本转换为 SRT 字幕文件...")
     logger.info("=" * 80)
     
     clip_srt_file = text_to_srt(
         srt_string=editing_text,
-        output_dir="resources/dst/srt_files/clip"
+        output_dir=str(get_workspace_path("srt_files/clip"))
     )
     logger.info(f"✅ 剪辑文本转SRT完成: {clip_srt_file}")
     return clip_srt_file
@@ -174,7 +172,7 @@ def step5_edit_video(clip_srt_file: str) -> str:
         剪辑后的视频文件路径
     """
     logger.info("=" * 80)
-    logger.info("【步骤 5/9】根据 SRT 字幕剪辑视频...")
+    logger.info("【步骤 5/10】根据 SRT 字幕剪辑视频...")
     logger.info("=" * 80)
     
     # 转换为绝对路径
@@ -202,7 +200,7 @@ def step6_refresh_timeline(clip_srt_file: str) -> str:
         刷新后的 SRT 文件路径
     """
     logger.info("=" * 80)
-    logger.info("【步骤 6/9】刷新剪辑 SRT 时间戳...")
+    logger.info("【步骤 6/10】刷新剪辑 SRT 时间戳...")
     logger.info("=" * 80)
     
     # 生成新的 SRT 文件路径
@@ -232,7 +230,7 @@ def step7_ai_commentary_workflow(
         AI 生成的解说文本
     """
     logger.info("=" * 80)
-    logger.info("【步骤 7/9】运行 AI 解说工作流...")
+    logger.info("【步骤 7/10】运行 AI 解说工作流...")
     logger.info("=" * 80)
     
     # 读取剪辑 SRT 文件内容
@@ -289,12 +287,12 @@ def step8_commentary_text_to_srt(commentary_text: str) -> str:
         解说 SRT 文件路径
     """
     logger.info("=" * 80)
-    logger.info("【步骤 8/9】将解说文本转换为 SRT 字幕文件...")
+    logger.info("【步骤 8/10】将解说文本转换为 SRT 字幕文件...")
     logger.info("=" * 80)
     
     commentary_srt_file = text_to_srt(
         srt_string=commentary_text,
-        output_dir="resources/dst/srt_files/jieShuo"
+        output_dir=str(get_workspace_path("srt_files/jieShuo"))
     )
     logger.info(f"✅ 解说文本转SRT完成: {commentary_srt_file}")
     return commentary_srt_file
@@ -323,15 +321,15 @@ def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -
 
     # 为音频和 JSON 生成统一的时间戳目录
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    audio_run_dir = Path(audio_output_dir) / timestamp
+    audio_run_dir = get_workspace_path("audios") / timestamp
     audio_run_dir_str = str(audio_run_dir)
-    json_run_dir = str(Path(output_json_dir) / timestamp)
+    json_run_dir = str(get_workspace_path("json/jieShuo") / timestamp)
 
     # 更新音频命名模式，使其指向当前时间目录
     audio_pattern_name = Path(audio_pattern).name
     audio_pattern_for_run = str(audio_run_dir / audio_pattern_name)
 
-    audio_abs_dir = config.get_absolute_path(audio_run_dir_str)
+    audio_abs_dir = str(audio_run_dir)
     
     # 根据解说 SRT 生成音频文件
     generate_audio_from_srt(
@@ -350,7 +348,7 @@ def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -
         srt_file=commentary_srt_file,
         output_dir=json_run_dir
     )
-    logger.info(f"✅ 剪映项目生成完成: {config.get_absolute_path(json_run_dir)}")
+    logger.info(f"✅ 剪映项目生成完成: {json_run_dir}")
     
     return json_run_dir
 

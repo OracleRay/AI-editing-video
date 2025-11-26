@@ -113,7 +113,7 @@ def generate_project_data(video_mat_id, speed_id, total_duration, project_id,
                 },
                 "crop_ratio": "free",
                 "crop_scale": 1.0,
-                "duration": total_duration,
+                "duration": total_duration,  # 使用项目总时长而不是视频原始时长
                 "height": 1080,
                 "id": video_mat_id,
                 "local_material_id": "",

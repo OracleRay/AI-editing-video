@@ -11,8 +11,8 @@ config = get_config()
 logger = get_logger('video_editing', silent=True)
 
 # # 获取视频剪辑配置（转换为绝对路径）
-TEMP_DIR = config.get_absolute_path(config.get("video.temp"))  # 临时文件目录
-OUTPUT_DIR = config.get_absolute_path(config.get("video.output"))  # 输出目录
+TEMP_DIR = config.get_workspace_path("videos/temp")  # 临时文件目录
+OUTPUT_DIR = config.get_workspace_path("videos")  # 输出目录
 
 # 获取FFmpeg配置（转换为绝对路径）
 FFMPEG_PATH = config.get_absolute_path(config.get("ffmpeg.ffmpeg_path"))  # ffmpeg路径

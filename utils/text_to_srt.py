@@ -14,7 +14,7 @@ config = get_config()
 
 
 def text_to_srt(srt_string: str, 
-                output_dir: str = "resources/dst/srt_files") -> str:
+                output_dir: str = "workspace/srt_files") -> str:
     """
     将包含转义符的 SRT 字符串保存为 SRT 文件
     
@@ -44,7 +44,11 @@ def text_to_srt(srt_string: str,
     srt_content = srt_string.replace('\\n', '\n')
     
     # 使用 config_loader 转换为绝对路径（确保基于项目根目录）
-    output_path = Path(config.get_absolute_path(output_dir))
+    # 如果传入的是绝对路径，直接使用；否则转换为基于项目根目录的绝对路径
+    if os.path.isabs(output_dir):
+        output_path = Path(output_dir)
+    else:
+        output_path = Path(config.get_absolute_path(output_dir))
     
     # 确保输出目录存在
     output_path.mkdir(parents=True, exist_ok=True)
