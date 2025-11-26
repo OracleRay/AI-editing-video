@@ -23,6 +23,7 @@ class DifyClient:
         """
         self.workflow_name = workflow_name
         self.config = self._load_dify_config()
+        self.user = self.config['user']
         self.base_url = self.config.get('base_url')
         self.workflow_config = self.config.get('workflows', {}).get(workflow_name)
         
@@ -58,15 +59,14 @@ class DifyClient:
         
         return config
     
-    def upload_file(self, content: str, filename: str = "input.txt", user: str = "user") -> Dict[str, Any]:
+    def upload_file(self, content: str, filename: str = "input.txt") -> Dict[str, Any]:
         """
         上传文本内容为文件到 Dify
         
         Args:
             content: 文本内容
             filename: 文件名
-            user: 用户标识
-        
+
         Returns:
             包含 id 的文件信息字典
         """
@@ -84,7 +84,7 @@ class DifyClient:
         }
         
         data = {
-            'user': user
+            'user': self.user
         }
         
         try:
@@ -115,14 +115,13 @@ class DifyClient:
                 pass
             raise Exception(f"文件上传失败: {str(e)}{error_detail}")
     
-    def run_workflow(self, inputs: Dict[str, Any], user: str = "abc-123") -> str:
+    def run_workflow(self, inputs: Dict[str, Any]) -> str:
         """
         运行 Dify 工作流
         
         Args:
             inputs: 输入参数字典
-            user: 用户标识，默认为 "user"
-        
+
         Returns:
             工作流生成的文本内容
         
@@ -142,7 +141,7 @@ class DifyClient:
         payload = {
             "inputs": inputs,
             "response_mode": "streaming",
-            "user": user
+            "user": self.user
         }
         
         try:

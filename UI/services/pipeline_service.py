@@ -40,7 +40,8 @@ class PipelineService:
     def run_editing_only(
         self, 
         video_path: str, 
-        progress_callback: Optional[Callable[[str, int], None]] = None
+        progress_callback: Optional[Callable[[str, int], None]] = None,
+        story_content: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         功能 1：只执行 AI 剪辑（步骤 1-6）
@@ -48,6 +49,7 @@ class PipelineService:
         Args:
             video_path: 上传的视频文件路径
             progress_callback: 进度回调函数，参数为(消息, 进度百分比)
+            story_content: 剧情内容
         
         Returns:
             包含处理结果的字典
@@ -76,7 +78,7 @@ class PipelineService:
             # 步骤 3：AI 剪辑工作流
             if progress_callback:
                 progress_callback("正在运行 AI 剪辑工作流...", 45)
-            editing_text = step3_ai_editing_workflow(self.step_data["original_text"])
+            editing_text = step3_ai_editing_workflow(self.step_data["original_text"], story_content)
             self.step_data["editing_text"] = editing_text
             
             # 步骤 4：剪辑文本转 SRT
@@ -153,7 +155,8 @@ class PipelineService:
                 lambda msg, pct: progress_callback(
                     msg,
                     int(min(pct * 0.6, 60))
-                ) if progress_callback else None
+                ),
+                commentary_params.get("plot") if commentary_params else None
             )
             
             if not result.get("success"):

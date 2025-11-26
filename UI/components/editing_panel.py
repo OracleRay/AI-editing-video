@@ -160,6 +160,24 @@ class EditingPanel(ttk.Frame):
         )
         self.edited_video_player.pack()
         
+        # 剧情内容输入框
+        story_content_frame = ttk.LabelFrame(left_frame, text=" 剧情内容 ", padding=15)
+        story_content_frame.pack(fill=tk.X, pady=(15, 0))
+        
+        self.story_content_text = tk.Text(
+            story_content_frame,
+            font=("微软雅黑", 10),
+            wrap=tk.WORD,
+            bg=self.COLORS['input_bg'],
+            fg=self.COLORS['fg'],
+            insertbackground=self.COLORS['fg'],
+            selectbackground=self.COLORS['accent'],
+            relief=tk.FLAT,
+            padx=10,
+            pady=10
+        )
+        self.story_content_text.pack(fill=tk.BOTH, expand=True)
+        
         # ========== 中间：视频预览 ==========
         middle_frame = ttk.Frame(content_frame)
         middle_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=0)
@@ -281,8 +299,10 @@ class EditingPanel(ttk.Frame):
         
         # 在后台线程执行
         def run_pipeline():
+            story_content = self.story_content_text.get("1.0", tk.END).strip()
             return self.pipeline_service.run_editing_only(
                 self.video_path,
+                story_content=story_content,
                 progress_callback=self._update_progress
             )
         

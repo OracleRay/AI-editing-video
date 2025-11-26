@@ -7,7 +7,7 @@ from typing import Dict, Any
 from .base import create_dify_client
 
 
-def run_commentary_workflow(inputs: Dict[str, Any], user: str = "user") -> str:
+def run_commentary_workflow(inputs: Dict[str, Any]) -> str:
     """
     运行 AI 解说工作流（commentary）
     
@@ -34,7 +34,7 @@ def run_commentary_workflow(inputs: Dict[str, Any], user: str = "user") -> str:
         text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
         
         # 上传文件
-        file_info = client.upload_file(text_content, filename="short_copy.txt", user=user)
+        file_info = client.upload_file(text_content, filename="short_copy.txt")
         
         # 替换为文件对象（单个对象，不是列表）
         inputs["short_copy"] = {
@@ -51,7 +51,7 @@ def run_commentary_workflow(inputs: Dict[str, Any], user: str = "user") -> str:
         text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
         
         # 上传文件
-        file_info = client.upload_file(text_content, filename="long_commentary.txt", user=user)
+        file_info = client.upload_file(text_content, filename="long_commentary.txt")
         
         # 替换为文件对象（单个对象，不是列表）
         inputs["long_commentary"] = {
@@ -61,12 +61,12 @@ def run_commentary_workflow(inputs: Dict[str, Any], user: str = "user") -> str:
         }
     
     # 调用工作流并返回生成的文本
-    result_text = client.run_workflow(inputs, user)
+    result_text = client.run_workflow(inputs)
     
     return result_text
 
 
-def run_editing_workflow(inputs: Dict[str, Any], user: str = "abc-123") -> str:
+def run_editing_workflow(inputs: Dict[str, Any]) -> str:
     """
     运行 AI 剪辑工作流（editing）
     
@@ -93,7 +93,7 @@ def run_editing_workflow(inputs: Dict[str, Any], user: str = "abc-123") -> str:
         text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
         
         # 上传文件
-        file_info = client.upload_file(text_content, filename="input_lines.txt", user=user)
+        file_info = client.upload_file(text_content, filename="input_lines.txt")
         
         # 替换为文件对象列表
         inputs["long_lines"] = [{
@@ -103,7 +103,7 @@ def run_editing_workflow(inputs: Dict[str, Any], user: str = "abc-123") -> str:
         }]
     
     # 调用工作流并返回生成的文本
-    result_text = client.run_workflow(inputs, user)
+    result_text = client.run_workflow(inputs)
     
     return result_text
 

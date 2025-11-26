@@ -112,13 +112,13 @@ def step2_audio_to_subtitles(audio_output_path: Path, video_src_path: Path) -> D
 
 
 # ========== 步骤 3：AI 剪辑工作流 ==========
-def step3_ai_editing_workflow(original_text: str) -> str:
+def step3_ai_editing_workflow(original_text: str, plot: Optional[str] = None) -> str:
     """
     步骤 3：运行 AI 剪辑工作流
     
     Args:
         original_text: 识别出的原始文本内容
-    
+        plot: 剧情内容
     Returns:
         AI 生成的剪辑文本
     """
@@ -128,7 +128,8 @@ def step3_ai_editing_workflow(original_text: str) -> str:
 
     # 准备剪辑工作流的输入参数
     editing_inputs = {
-        "long_lines": original_text
+        "long_lines": original_text,
+        "plot": plot
     }
     
     # 调用剪辑工作流
@@ -225,6 +226,9 @@ def step7_ai_commentary_workflow(
     
     Args:
         clip_srt_file: 剪辑 SRT 文件路径
+        plot: 剧情
+        video_type: 视频类型
+        long_commentary_path: 长解说
 
     Returns:
         AI 生成的解说文本
@@ -374,137 +378,3 @@ def step10_copy_project_to_destination(project_json_dir: str, destination_dir: s
     exported_path = copy_project_to_directory(project_json_dir, destination_dir)
     logger.info(f"✅ 剪映项目已复制到目标目录: {exported_path}")
     return exported_path
-
-
-# ========== 主控制函数 ==========
-def run_pipeline(
-    start_step: int = 1,
-    end_step: int = 10,
-    step_data: Optional[Dict[str, Any]] = None,
-    export_destination_dir: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    运行视频处理流水线
-    
-    Args:
-        start_step: 起始步骤（1-10）
-        end_step: 结束步骤（1-10）
-        step_data: 如果从中间步骤开始，需要提供前置步骤的数据
-                  例如从步骤3开始: {"original_text": "..."}
-                  例如从步骤5开始: {"clip_srt_file": "path/to/file.srt"}
-    
-    Returns:
-        所有步骤生成的数据字典
-    """
-    if step_data is None:
-        step_data = {}
-    
-    if export_destination_dir:
-        step_data["export_destination_dir"] = export_destination_dir
-    elif "export_destination_dir" not in step_data:
-        # 默认使用桌面目录
-        step_data["export_destination_dir"] = str((Path.home() / "Desktop").resolve())
-    
-    # 步骤 1：视频转音频
-    if start_step <= 1 <= end_step:
-        result = step1_video_to_audio()
-        step_data.update(result)
-    
-    # 步骤 2：音频转字幕
-    if start_step <= 2 <= end_step:
-        if "audio_output_path" not in step_data or "video_src_path" not in step_data:
-            raise ValueError("步骤2需要: audio_output_path, video_src_path")
-        result = step2_audio_to_subtitles(
-            step_data["audio_output_path"],
-            step_data["video_src_path"]
-        )
-        step_data.update(result)
-    
-    # 步骤 3：AI 剪辑工作流
-    if start_step <= 3 <= end_step:
-        if "original_text" not in step_data:
-            raise ValueError("步骤3需要: original_text")
-        editing_text = step3_ai_editing_workflow(step_data["original_text"])
-        step_data["editing_text"] = editing_text
-    
-    # 步骤 4：剪辑文本转 SRT
-    if start_step <= 4 <= end_step:
-        if "editing_text" not in step_data:
-            raise ValueError("步骤4需要: editing_text")
-        clip_srt_file = step4_editing_text_to_srt(step_data["editing_text"])
-        step_data["original_clip_srt"] = clip_srt_file
-        step_data["clip_srt_file"] = clip_srt_file
-    
-    # 步骤 5：根据 SRT 剪辑视频
-    if start_step <= 5 <= end_step:
-        if "clip_srt_file" not in step_data:
-            raise ValueError("步骤5需要: clip_srt_file")
-        edited_video = step5_edit_video(step_data["clip_srt_file"])
-        step_data["edited_video"] = edited_video
-    
-    # 步骤 6：刷新时间戳
-    if start_step <= 6 <= end_step:
-        if "clip_srt_file" not in step_data:
-            raise ValueError("步骤6需要: clip_srt_file")
-        refreshed_clip_srt = step6_refresh_timeline(step_data["clip_srt_file"])
-        step_data["refreshed_clip_srt"] = refreshed_clip_srt
-        step_data["clip_srt_file"] = refreshed_clip_srt  # 更新为刷新后的文件
-    
-    # 步骤 7：AI 解说工作流
-    if start_step <= 7 <= end_step:
-        if "clip_srt_file" not in step_data:
-            raise ValueError("步骤7需要: clip_srt_file")
-        commentary_text = step7_ai_commentary_workflow(
-            step_data["clip_srt_file"]
-        )
-        step_data["commentary_text"] = commentary_text
-    
-    # 步骤 8：解说文本转 SRT
-    if start_step <= 8 <= end_step:
-        if "commentary_text" not in step_data:
-            raise ValueError("步骤8需要: commentary_text")
-        commentary_srt_file = step8_commentary_text_to_srt(step_data["commentary_text"])
-        step_data["commentary_srt_file"] = commentary_srt_file
-    
-    # 步骤 9：生成剪映项目
-    if start_step <= 9 <= end_step:
-        if "edited_video" not in step_data or "commentary_srt_file" not in step_data:
-            raise ValueError("步骤9需要: edited_video, commentary_srt_file")
-        project_json_dir = step9_generate_capcut_project(
-            step_data["edited_video"],
-            step_data["commentary_srt_file"]
-        )
-        step_data["project_json_dir"] = project_json_dir
-    
-    # 步骤 10：复制剪映项目到桌面
-    if start_step <= 10 <= end_step:
-        if "project_json_dir" not in step_data:
-            raise ValueError("步骤10需要: project_json_dir")
-        if "export_destination_dir" not in step_data:
-            raise ValueError("步骤10需要: export_destination_dir")
-        desktop_project_path = step10_copy_project_to_destination(
-            step_data["project_json_dir"],
-            step_data["export_destination_dir"]
-        )
-        step_data["desktop_project_path"] = desktop_project_path
-    
-    return step_data
-
-
-if __name__ == "__main__":
-    # 初始化日志系统
-    from utils.loggers import get_app_logger
-    get_app_logger()
-    
-    # 选项 1：运行完整流程（步骤 1-10）
-    result = run_pipeline(start_step=1, end_step=10)
-    
-    # 选项 2：从步骤 7 开始运行（AI 解说工作流 → 生成剪映项目）
-    # result = run_pipeline(
-    #     start_step=7,
-    #     end_step=9,
-    #     step_data={
-    #         "clip_srt_file": "resources/dst/srt_files/clip/20251118_173118_fresh.txt",  # 剪辑字幕文件
-    #         "edited_video": "resources/dst/videos/final_clip.mp4"  # 剪辑后的视频文件
-    #     }
-    # )
