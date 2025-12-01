@@ -161,7 +161,7 @@ class EditingPanel(ttk.Frame):
         self.edited_video_player.pack()
         
         # 剧情内容输入框
-        story_content_frame = ttk.LabelFrame(left_frame, text=" 剧情内容 ", padding=15)
+        story_content_frame = ttk.LabelFrame(left_frame, text=" 剧情内容（可选） ", padding=15)
         story_content_frame.pack(fill=tk.X, pady=(15, 0))
         
         self.story_content_text = tk.Text(
@@ -300,6 +300,8 @@ class EditingPanel(ttk.Frame):
         # 在后台线程执行
         def run_pipeline():
             story_content = self.story_content_text.get("1.0", tk.END).strip()
+            # 如果用户没有输入剧情内容，传递 None
+            story_content = story_content if story_content else None
             return self.pipeline_service.run_editing_only(
                 self.video_path,
                 story_content=story_content,

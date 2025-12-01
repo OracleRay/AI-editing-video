@@ -78,8 +78,9 @@ class PipelineService:
             # 步骤 3：AI 剪辑工作流
             if progress_callback:
                 progress_callback("正在运行 AI 剪辑工作流...", 45)
-            editing_text = step3_ai_editing_workflow(self.step_data["original_text"], story_content)
-            self.step_data["editing_text"] = editing_text
+            editing_result = step3_ai_editing_workflow(self.step_data["original_text"], story_content)
+            self.step_data["editing_text"] = editing_result["editing_text"]
+            self.step_data["generated_plot"] = editing_result["generated_plot"]
             
             # 步骤 4：剪辑文本转 SRT
             if progress_callback:
@@ -125,7 +126,7 @@ class PipelineService:
         self, 
         video_path: str, 
         progress_callback: Optional[Callable[[str, int], None]] = None,
-        commentary_params: Optional[Dict[str, str]] = None,
+        plot_params: Optional[str] = None,
         export_target_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -134,6 +135,8 @@ class PipelineService:
         Args:
             video_path: 上传的视频文件路径
             progress_callback: 进度回调函数，参数为(消息, 进度百分比)
+            plot_params: 剧情参数（可选）
+            export_target_dir: 导出目录
         
         Returns:
             包含处理结果的字典
@@ -156,7 +159,7 @@ class PipelineService:
                     msg,
                     int(min(pct * 0.6, 60))
                 ),
-                commentary_params.get("plot") if commentary_params else None
+                story_content=plot_params  # 直接传递 plot_params
             )
             
             if not result.get("success"):
@@ -165,12 +168,11 @@ class PipelineService:
             # 步骤 7：AI 解说工作流
             if progress_callback:
                 progress_callback("正在运行 AI 解说工作流...", 70)
-            commentary_params = commentary_params or {}
+            # 使用从 AI 剪辑工作流生成的 plot，如果没有则使用用户输入的 plot
+            commentary_plot = self.step_data.get("generated_plot") or plot_params
             commentary_text = step7_ai_commentary_workflow(
                 self.step_data["clip_srt_file"],
-                plot=commentary_params.get("plot"),
-                video_type=commentary_params.get("video_type"),
-                long_commentary_path=commentary_params.get("long_commentary_path")
+                plot=commentary_plot
             )
             self.step_data["commentary_text"] = commentary_text
             
@@ -257,9 +259,7 @@ class PipelineService:
                 # 步骤 7：AI 解说工作流
                 commentary_text = step7_ai_commentary_workflow(
                     clip_srt_file,
-                    plot=params.get("plot"),
-                    video_type=params.get("video_type"),
-                    long_commentary_path=params.get("long_commentary_path")
+                    plot=params.get("plot")
                 )
                 
                 # 步骤 8：解说文本转 SRT

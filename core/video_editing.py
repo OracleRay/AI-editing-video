@@ -201,10 +201,9 @@ def edit_video(srt_file, video_file):
     return final_video
 
 if __name__ == "__main__":
-    import sys
 
     # 测试用的默认SRT文件路径
-    srt_file_path = "../test/test.txt"
+    srt_file_path = "../test/test_1.txt"
 
     video_src_path = "C:/Users/leidc/Desktop/123/超级翁婿01.mp4"
     

@@ -40,8 +40,6 @@ class MultiCommentaryPanel(ttk.Frame):
         self.clip_srt_file = None
         self.edited_video = None
         self.progress_line_start = None  # 记录进度行的起始位置
-        self.video_type_var = tk.StringVar(value="都市爱情")
-        self.long_commentary_path_var = tk.StringVar(value="")
         self.export_dir_var = tk.StringVar(value="")
         
         self.config(style='TFrame')
@@ -213,19 +211,8 @@ class MultiCommentaryPanel(ttk.Frame):
         ).pack(side=tk.LEFT, padx=5)
 
         # 解说参数区域
-        commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数 ", padding=15)
+        commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数（可选） ", padding=15)
         commentary_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            commentary_frame,
-            text="视频类型:",
-            font=("微软雅黑", 9)
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        ttk.Entry(
-            commentary_frame,
-            textvariable=self.video_type_var
-        ).pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(
             commentary_frame,
@@ -243,34 +230,6 @@ class MultiCommentaryPanel(ttk.Frame):
             relief=tk.FLAT
         )
         self.plot_text.pack(fill=tk.X, pady=(0, 10))
-
-        ttk.Label(
-            commentary_frame,
-            text="解说文件（模拟解说风格）:",
-            font=("微软雅黑", 9)
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        long_commentary_file_frame = ttk.Frame(commentary_frame)
-        long_commentary_file_frame.pack(fill=tk.X)
-
-        self.long_commentary_display = tk.Label(
-            long_commentary_file_frame,
-            text="未选择",
-            font=("微软雅黑", 9),
-            bg=self.COLORS['text_bg'],
-            fg=self.COLORS['fg'],
-            anchor=tk.W,
-            padx=10,
-            pady=6
-        )
-        self.long_commentary_display.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
-        self._update_long_commentary_display()
-
-        ttk.Button(
-            long_commentary_file_frame,
-            text="浏览",
-            command=self._select_long_commentary_file
-        ).pack(side=tk.RIGHT)
         
         # 导出目录
         export_frame = ttk.LabelFrame(left_frame, text=" 剪映导出目录 ", padding=15)
@@ -514,35 +473,11 @@ class MultiCommentaryPanel(ttk.Frame):
 
     def _collect_commentary_params(self) -> Dict[str, str]:
         """收集解说参数"""
-        params = {
-            "plot": self.plot_text.get("1.0", tk.END).strip(),
-            "video_type": self.video_type_var.get().strip(),
-            "long_commentary_path": self.long_commentary_path_var.get().strip()
-        }
-        return {k: v for k, v in params.items() if v}
-
-    def _select_long_commentary_file(self):
-        """选择长解说示例文件"""
-        initial_dir = None
-        current_path = self.long_commentary_path_var.get().strip()
-        if current_path:
-            current_path_obj = Path(current_path)
-            if current_path_obj.exists():
-                initial_dir = str(current_path_obj.parent)
-        file_path = filedialog.askopenfilename(
-            title="选择长解说示例文件",
-            filetypes=[
-                ("字幕/文本文件", "*.srt *.txt"),
-                ("所有文件", "*.*")
-            ],
-            initialdir=initial_dir
-        )
-        if file_path:
-            self.long_commentary_path_var.set(file_path)
-            self._update_long_commentary_display(Path(file_path).name)
-            self._log_result(f"📄 已选择长解说示例: {file_path}\n")
-        else:
-            self._update_long_commentary_display()
+        plot = self.plot_text.get("1.0", tk.END).strip()
+        # 如果用户没有输入剧情内容，返回空字典
+        if not plot:
+            return {}
+        return {"plot": plot}
 
     def _select_export_dir(self):
         """选择导出目录"""
@@ -555,8 +490,3 @@ class MultiCommentaryPanel(ttk.Frame):
             self.export_dir_var.set(selected)
             self.export_dir_display.config(text=selected)
             self._log_result(f"🗂️ 导出目录已设置为: {selected}\n")
-
-    def _update_long_commentary_display(self, text: Optional[str] = None):
-        """更新长解说文件显示"""
-        display_text = text or ("未选择" if not self.long_commentary_path_var.get().strip() else Path(self.long_commentary_path_var.get()).name)
-        self.long_commentary_display.config(text=display_text)

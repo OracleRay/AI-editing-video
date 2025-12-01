@@ -53,43 +53,20 @@ def create_srt(transcription: dict, srt_path: str) -> str:
 
 def main():
     # 批量处理 resources/src/audios/ 目录下的所有音频文件
-    project_root = Path(__file__).parent.parent
-    input_dir = project_root / "resources" / "src" / "audios" / "processing"
-    output_dir = project_root / "resources" / "src" / "srt_files"
-    
-    # 确保输出目录存在
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 获取所有音频文件
-    audio_files = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() == ".mp3"]
-    
-    if not audio_files:
-        logger.warning(f"在 {input_dir} 目录下没有找到 mp3 文件")
-        return
-    
-    logger.info(f"找到 {len(audio_files)} 个音频文件，开始转录...")
-    
-    success_count = 0
-    failed_count = 0
-    
-    for audio_file in audio_files:
-        srt_file = output_dir / f"{audio_file.stem}.srt"
-        txt_file = output_dir / "txt" / f"{audio_file.stem}.txt"
-        
-        try:
-            logger.info(f"正在转录: {audio_file.name}")
-            result = transcribe_audio(str(audio_file), API_URL)
-            
-            create_srt(result, str(srt_file))
-            srt_to_txt(str(srt_file), str(txt_file))
-            
-            logger.info(f"✓ 转录成功: {audio_file.name} -> {srt_file.name}")
-            success_count += 1
-        except Exception as e:
-            logger.error(f"✗ 转录失败 {audio_file.name}: {e}")
-            failed_count += 1
-    
-    logger.info(f"转录完成！成功: {success_count}, 失败: {failed_count}")
+    project_root = Path("C:/Users/leidc/Desktop/视频转文字/temp")
+    audio_file = project_root / "13408704556454612.mp3"
+    srt_file = project_root / "temp.srt"
+
+    try:
+        logger.info(f"正在转录: {audio_file.name}")
+        result = transcribe_audio(str(audio_file), API_URL)
+
+        create_srt(result, str(srt_file))
+
+        logger.info(f"✓ 转录成功: {audio_file.name} -> {srt_file.name}")
+    except Exception as e:
+        logger.error(f"✗ 转录失败 {audio_file.name}: {e}")
+
 
 
 if __name__ == "__main__":

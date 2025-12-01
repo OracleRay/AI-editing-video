@@ -30,10 +30,11 @@ def create_base_segment():
 
 def generate_project_data(video_mat_id, speed_id, total_duration, project_id,
                           audio_materials, video_track, audio_tracks,
-                          video_filename, video_abs_path):
+                          video_filename, video_abs_path, aspect_ratio="16:9",
+                          canvas_width=1920, canvas_height=1080):
     """生成剪映项目的 draft_content.json 数据"""
     project = {
-        "canvas_config": {"height": 1080, "ratio": "16:9", "width": 1920},
+        "canvas_config": {"height": canvas_height, "ratio": aspect_ratio, "width": canvas_width},
         "color_space": 0,
         "config": {
             "adjust_max_index": 1,
@@ -114,7 +115,7 @@ def generate_project_data(video_mat_id, speed_id, total_duration, project_id,
                 "crop_ratio": "free",
                 "crop_scale": 1.0,
                 "duration": total_duration,  # 使用项目总时长而不是视频原始时长
-                "height": 1080,
+                "height": canvas_height,
                 "id": video_mat_id,
                 "local_material_id": "",
                 "material_id": video_mat_id,
@@ -122,7 +123,7 @@ def generate_project_data(video_mat_id, speed_id, total_duration, project_id,
                 "media_path": "",
                 "path": video_abs_path,
                 "type": "video",
-                "width": 1920
+                "width": canvas_width
             }],
             "vocal_beautifys": [], "vocal_separations": []
         },

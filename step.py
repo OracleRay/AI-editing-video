@@ -112,15 +112,15 @@ def step2_audio_to_subtitles(audio_output_path: Path, video_src_path: Path) -> D
 
 
 # ========== 步骤 3：AI 剪辑工作流 ==========
-def step3_ai_editing_workflow(original_text: str, plot: Optional[str] = None) -> str:
+def step3_ai_editing_workflow(original_text: str, plot: Optional[str] = None) -> Dict[str, str]:
     """
     步骤 3：运行 AI 剪辑工作流
     
     Args:
         original_text: 识别出的原始文本内容
-        plot: 剧情内容
+        plot: 剧情内容（可选）
     Returns:
-        AI 生成的剪辑文本
+        包含 AI 生成的剪辑文本和生成剧情的字典
     """
     logger.info("=" * 80)
     logger.info("【步骤 3/10】运行 AI 剪辑工作流...")
@@ -133,9 +133,17 @@ def step3_ai_editing_workflow(original_text: str, plot: Optional[str] = None) ->
     }
     
     # 调用剪辑工作流
-    editing_text = run_editing_workflow(editing_inputs)
+    editing_result = run_editing_workflow(editing_inputs)
     logger.info("✅ AI 剪辑工作流执行完成")
-    return editing_text
+    
+    # 从字典结果中提取文本和节点输出
+    editing_text = editing_result.get("text", "")
+    plot_text = editing_result.get("plot", "")
+    
+    return {
+        "editing_text": editing_text,
+        "generated_plot":  plot or plot_text  # 如果没有输入的plot，使用生成plot
+    }
 
 
 # ========== 步骤 4：剪辑文本转 SRT ==========
@@ -217,9 +225,7 @@ def step6_refresh_timeline(clip_srt_file: str) -> str:
 # ========== 步骤 7：AI 解说工作流 ==========
 def step7_ai_commentary_workflow(
     clip_srt_file: str,
-    plot: Optional[str] = None,
-    video_type: Optional[str] = None,
-    long_commentary_path: Optional[str] = None
+    plot: Optional[str] = None
 ) -> str:
     """
     步骤 7：运行 AI 解说工作流
@@ -227,8 +233,6 @@ def step7_ai_commentary_workflow(
     Args:
         clip_srt_file: 剪辑 SRT 文件路径
         plot: 剧情
-        video_type: 视频类型
-        long_commentary_path: 长解说
 
     Returns:
         AI 生成的解说文本
@@ -241,41 +245,19 @@ def step7_ai_commentary_workflow(
     with open(clip_srt_file, 'r', encoding='utf-8') as f:
         clip_srt_content = f.read()
     
-    # 读取 long_commentary 示例文件内容（支持自定义文件覆盖）
-    default_long_commentary_path = config.get("srt_file.jieShuo_example")
-    long_commentary_abs_path = Path(config.get_absolute_path(default_long_commentary_path))
-    
-    def _read_long_commentary(target_path: Path) -> Optional[str]:
-        try:
-            with open(target_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except FileNotFoundError:
-            logger.warning(f"长解说示例文件不存在: {target_path}")
-        except Exception as exc:
-            logger.error(f"读取长解说示例文件失败 ({target_path}): {exc}")
-        return None
-    
-    long_commentary_content = _read_long_commentary(long_commentary_abs_path) or ""
-    
-    if long_commentary_path:
-        custom_path = Path(config.get_absolute_path(long_commentary_path))
-        custom_content = _read_long_commentary(custom_path)
-        if custom_content:
-            long_commentary_content = custom_content
-        else:
-            logger.warning("自定义长解说文件读取失败，继续使用默认示例内容")
-    
     # 准备解说工作流的输入参数
     commentary_inputs = {
         "plot": plot or DEFAULT_COMMENTARY_PLOT,
-        "short_copy": clip_srt_content,
-        "video_type": video_type or DEFAULT_VIDEO_TYPE,
-        "long_commentary": long_commentary_content
+        "short_copy": clip_srt_content
     }
     
     # 调用解说工作流
-    commentary_text = run_commentary_workflow(commentary_inputs)
+    commentary_result = run_commentary_workflow(commentary_inputs)
     logger.info("✅ AI 解说工作流执行完成")
+    
+    # 从字典结果中提取文本
+    commentary_text = commentary_result.get("text", "")
+    
     return commentary_text
 
 

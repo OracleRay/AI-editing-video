@@ -107,6 +107,59 @@ def get_audio_duration(audio_path):
     except Exception as e:
         return None
 
+def get_video_aspect_ratio(video_path):
+    """获取视频文件的宽高比，返回'16:9'或'4:3'，如果无法获取则返回None"""
+    try:
+        ffprobe_abs_path = config.get_absolute_path(FFPROBE_PATH)
+        result = subprocess.run(
+            [ffprobe_abs_path, '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=width,height', '-of', 'csv=p=0', video_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            dimensions = result.stdout.strip().split(',')
+            if len(dimensions) == 2:
+                width = int(dimensions[0])
+                height = int(dimensions[1])
+                
+                # 计算宽高比
+                ratio = width / height
+                
+                # 判断比例（允许一定的误差范围）
+                if 1.3 <= ratio <= 1.4:  # 4:3 ≈ 1.333
+                    return "4:3"
+                elif 1.7 <= ratio <= 1.8:  # 16:9 ≈ 1.777
+                    return "16:9"
+                elif 1.2 <= ratio <= 1.3:  # 5:4 ≈ 1.25
+                    return "5:4"
+                elif 0.7 <= ratio <= 0.8:  # 9:16 ≈ 0.5625 (竖屏)
+                    return "9:16"
+                else:
+                    # 对于其他比例，返回最接近的标准比例
+                    if abs(ratio - 1.333) < abs(ratio - 1.777):
+                        return "4:3"
+                    else:
+                        return "16:9"
+        
+        return None
+    except Exception as e:
+        logger.error(f"获取视频宽高比失败: {e}")
+        return None
+
+def get_canvas_dimensions(aspect_ratio):
+    """根据宽高比返回画布尺寸"""
+    if aspect_ratio == "4:3":
+        return 1440, 1080  # 4:3 标准分辨率
+    elif aspect_ratio == "5:4":
+        return 1280, 1024  # 5:4 标准分辨率
+    elif aspect_ratio == "9:16":
+        return 1080, 1920  # 竖屏9:16
+    else:  # 默认16:9
+        return 1920, 1080  # 16:9 标准分辨率
+
 # === 生成项目文件 ===
 def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
     # 将相对路径转换为绝对路径
@@ -290,6 +343,17 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
         }
         audio_tracks.append(audio_track)
     
+    # === 检测视频宽高比 ===
+    aspect_ratio = get_video_aspect_ratio(video_abs_path)
+    if aspect_ratio is None:
+        aspect_ratio = "16:9"  # 默认使用16:9
+        logger.warning(f"无法获取视频宽高比，使用默认值: {aspect_ratio}")
+    else:
+        logger.info(f"检测到视频宽高比: {aspect_ratio}")
+    
+    # 获取对应的画布尺寸
+    canvas_width, canvas_height = get_canvas_dimensions(aspect_ratio)
+
     # === 组装项目 ===
     project = generate_project_data(
         video_mat_id=video_mat_id,
@@ -300,7 +364,10 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
         video_track=video_track,
         audio_tracks=audio_tracks,
         video_filename=video_filename,
-        video_abs_path=video_abs_path
+        video_abs_path=video_abs_path,
+        aspect_ratio=aspect_ratio,
+        canvas_width=canvas_width,
+        canvas_height=canvas_height
     )
     
     # === 生成元数据 ===
@@ -331,7 +398,7 @@ if __name__ == "__main__":
 
     # 生成剪映项目文件
     generate_capcut_project(
-        video_file="C:/Users/leidc/Desktop/workspace/videos/20251126_140212.mp4",
+        video_file="C:/Users/leidc/Desktop/workspace/videos/20251126_164351.mp4",
         audio_pattern=str("C:/Users/leidc/Desktop/workspace/audios/test/" + Path(config.get('audio.pattern')).name),
         srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/test.txt",
         output_dir="C:/Users/leidc/Desktop/workspace/json/test/"

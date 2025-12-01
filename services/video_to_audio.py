@@ -84,40 +84,16 @@ def convert_video_to_audio(input_path: Path, output_path: Path) -> None:
 
 
 if __name__ == "__main__":
+    project_root = Path("C:/Users/leidc/Desktop/视频转文字")
     # 批量处理 resources/src/videos/ 目录下的所有视频文件
-    project_root = Path(__file__).parent.parent
-    input_dir = project_root / "resources" / "src" / "videos" / "processing"
-    output_dir = project_root / "resources" / "src" / "audios" / "processing"
-    
-    # 确保输出目录存在
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 支持的视频格式
-    video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".m4v"]
-    
-    # 获取所有视频文件
-    video_files = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in video_extensions]
-    
-    if not video_files:
-        logger.warning(f"在 {input_dir} 目录下没有找到视频文件")
-        sys.exit(1)
-    
-    logger.info(f"找到 {len(video_files)} 个视频文件，开始转换...")
-    
-    success_count = 0
-    failed_count = 0
-    
-    for video_file in video_files:
-        output_file = output_dir / f"{video_file.stem}.mp3"
-        try:
-            logger.info(f"正在转换: {video_file.name} -> {output_file.name}")
-            convert_video_to_audio(video_file, output_file)
-            logger.info(f"✓ 转换成功: {output_file.name}")
-            success_count += 1
-        except Exception as e:
-            logger.error(f"✗ 转换失败 {video_file.name}: {e}")
-            failed_count += 1
-    
-    logger.info(f"转换完成！成功: {success_count}, 失败: {failed_count}")
+    video_file = project_root / "13408704556454612.mp4"
+    output_file = project_root / "temp/"
+
+    try:
+        logger.info(f"正在转换: {video_file.name}")
+        convert_video_to_audio(video_file, output_file)
+        logger.info(f"✓ 转换成功: {output_file.name}")
+    except Exception as e:
+        logger.error(f"✗ 转换失败 {video_file.name}: {e}")
 
 
