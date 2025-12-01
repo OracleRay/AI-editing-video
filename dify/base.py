@@ -115,7 +115,7 @@ class DifyClient:
                 pass
             raise Exception(f"文件上传失败: {str(e)}{error_detail}")
     
-    def run_workflow(self, inputs: Dict[str, Any]) -> str:
+    def run_workflow(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         运行 Dify 工作流
         
@@ -123,7 +123,7 @@ class DifyClient:
             inputs: 输入参数字典
 
         Returns:
-            工作流生成的文本内容
+            工作流生成的输出字典，包含 text 和 node_outputs
         
         Raises:
             Exception: 当 API 调用失败时抛出异常
@@ -158,9 +158,9 @@ class DifyClient:
             response.raise_for_status()
             
             # 处理流式响应
-            text = self._process_streaming_response(response)
+            result = self._process_streaming_response(response)
             
-            return text
+            return result
             
         except requests.exceptions.Timeout:
             raise Exception(f"Dify 工作流 '{self.workflow_name}' 请求超时")
@@ -176,7 +176,7 @@ class DifyClient:
         except Exception as e:
             raise Exception(f"处理 Dify 响应时出错: {str(e)}")
     
-    def _process_streaming_response(self, response: requests.Response) -> str:
+    def _process_streaming_response(self, response: requests.Response) -> Dict[str, Any]:
         """
         处理流式响应（SSE 格式）
         
@@ -184,10 +184,9 @@ class DifyClient:
             response: requests 响应对象
         
         Returns:
-            完整的生成文本
+            包含所有节点输出的字典
         """
-        full_text = ""
-        node_outputs = {}  # 存储所有节点的输出
+        result = {}  # 存储节点的输出
         
         # 逐行读取流式响应
         for line in response.iter_lines():
@@ -216,31 +215,8 @@ class DifyClient:
                         # 工作流完成，提取最终结果
                         outputs = data.get('data', {}).get('outputs', {})
                         
-                        if 'text' in outputs:
-                            full_text = outputs['text']
-                        elif outputs:
-                            # 获取第一个输出值
-                            first_key = list(outputs.keys())[0]
-                            full_text = str(outputs[first_key])
-                        
-                    elif event == 'text_chunk' or event == 'agent_message':
-                        # 文本块
-                        chunk = data.get('data', {}).get('text', '')
-                        full_text += chunk
-                        
-                    elif event == 'workflow_started':
-                        pass
-                        
-                    elif event == 'node_started':
-                        pass
-                        
-                    elif event == 'node_finished':
-                        node_title = data.get('data', {}).get('title', '')
-                        node_data = data.get('data', {})
-                        
-                        # 保存节点输出
-                        if 'outputs' in node_data:
-                            node_outputs[node_title] = node_data['outputs']
+                        if 'text' in outputs or 'result' in outputs:
+                            result = outputs
                     
                     elif event == 'error':
                         error_msg = data.get('data', {}).get('message', '未知错误')
@@ -251,29 +227,11 @@ class DifyClient:
                 except Exception as e:
                     continue
         
-        # 如果 full_text 为空，尝试从节点输出中获取
-        if not full_text and node_outputs:
-            # 尝试从各个节点中找到非空的文本输出
-            for node_name, outputs in node_outputs.items():
-                if isinstance(outputs, dict):
-                    # 尝试常见的字段名
-                    for key in ['text', 'result', 'output', 'content', 'data']:
-                        if key in outputs and outputs[key]:
-                            full_text = str(outputs[key])
-                            break
-                    if full_text:
-                        break
-                elif isinstance(outputs, str) and outputs:
-                    full_text = outputs
-                    break
-        
-        if not full_text:
+        if not result:
             raise Exception("未从流式响应中获取到任何文本内容")
         
-        # 清理返回的文本：如果是 Python 列表格式 ['...']，提取内容
-        full_text = self._clean_response_text(full_text)
-        
-        return full_text
+        # 返回包含所有节点输出的字典
+        return result
     
     def _clean_response_text(self, text: str) -> str:
         """
