@@ -180,6 +180,17 @@ class MultiCommentaryPanel(ttk.Frame):
             width=8
         ).pack(side=tk.RIGHT)
         
+        # 在文件选择框下方添加自动检测按钮
+        auto_detect_frame = ttk.Frame(file_frame)
+        auto_detect_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        ttk.Button(
+            auto_detect_frame,
+            text="🔍 自动检测（最新一次的剪辑结果）",
+            command=self._auto_select_both,
+            width=30
+        ).pack(side=tk.TOP, pady=5)
+        
         # 参数设置区域
         param_frame = ttk.LabelFrame(left_frame, text=" 参数设置 ", padding=15)
         param_frame.pack(fill=tk.X, pady=(0, 15))
@@ -325,8 +336,7 @@ class MultiCommentaryPanel(ttk.Frame):
         
         # 初始提示
         self._log_result("💡 请选择剪辑字幕文件和剪辑视频文件...\n")
-        self._log_result("   提示：这些文件通常在 resources/dst/ 目录下\n")
-    
+
     def _select_srt(self):
         """选择剪辑字幕文件"""
         file_path = filedialog.askopenfilename(
@@ -490,3 +500,67 @@ class MultiCommentaryPanel(ttk.Frame):
             self.export_dir_var.set(selected)
             self.export_dir_display.config(text=selected)
             self._log_result(f"🗂️ 导出目录已设置为: {selected}\n")
+
+    def _find_latest_srt_file(self):
+        """自动查找最新的字幕文件"""
+        workspace_dir = Path("C:/Users/leidc/Desktop/workspace")
+        clip_dir = workspace_dir / "srt_files" / "clip"
+        
+        if not clip_dir.exists():
+            return None
+        
+        # 查找所有包含"fresh"的txt文件
+        fresh_files = list(clip_dir.glob("*_fresh.txt"))
+        if not fresh_files:
+            return None
+        
+        # 按修改时间排序，获取最新的文件
+        latest_file = max(fresh_files, key=lambda x: x.stat().st_mtime)
+        return str(latest_file)
+
+    def _find_latest_video_file(self):
+        """自动查找最新的视频文件"""
+        workspace_dir = Path("C:/Users/leidc/Desktop/workspace")
+        videos_dir = workspace_dir / "videos"
+        
+        if not videos_dir.exists():
+            return None
+        
+        # 查找所有mp4文件
+        video_files = list(videos_dir.glob("*.mp4"))
+        if not video_files:
+            return None
+        
+        # 按修改时间排序，获取最新的文件
+        latest_file = max(video_files, key=lambda x: x.stat().st_mtime)
+        return str(latest_file)
+
+    def _auto_select_srt(self):
+        """自动选择最新的字幕文件"""
+        latest_srt = self._find_latest_srt_file()
+        if latest_srt:
+            self.clip_srt_file = latest_srt
+            self.srt_label.config(text=Path(latest_srt).name, foreground=self.COLORS['fg'])
+            self._check_ready()
+            self._log_result(f"\n✅ 已自动选择最新字幕: {Path(latest_srt).name}\n")
+        else:
+            self._log_result("\n❌ 未找到最新的字幕文件\n")
+
+    def _auto_select_video(self):
+        """自动选择最新的视频文件"""
+        latest_video = self._find_latest_video_file()
+        if latest_video:
+            self.edited_video = latest_video
+            self.video_label.config(text=Path(latest_video).name, foreground=self.COLORS['fg'])
+            self.video_preview.load_video(latest_video)
+            self._check_ready()
+            self._log_result(f"✅ 已自动选择最新视频: {Path(latest_video).name}\n")
+        else:
+            self._log_result("\n❌ 未找到视频文件\n")
+
+    def _auto_select_both(self):
+        """一键自动选择字幕和视频文件"""
+        self._auto_select_srt()
+        self._auto_select_video()
+        self._check_ready()
+        self._log_result("\n✅ 已一键自动选择字幕和视频文件\n")
