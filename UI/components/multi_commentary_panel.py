@@ -8,6 +8,7 @@ from tkinter import ttk, filedialog
 from pathlib import Path
 import sys
 from typing import Dict, Optional
+from utils.config_loader import get_config
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent
@@ -20,6 +21,8 @@ from UI.utils.ui_helpers import (
 )
 from UI.utils.video_preview import VideoPreviewWidget
 
+
+config = get_config()
 
 class MultiCommentaryPanel(ttk.Frame):
     """多次解说面板"""
@@ -503,8 +506,8 @@ class MultiCommentaryPanel(ttk.Frame):
 
     def _find_latest_srt_file(self):
         """自动查找最新的字幕文件"""
-        workspace_dir = Path("C:/Users/leidc/Desktop/workspace")
-        clip_dir = workspace_dir / "srt_files" / "clip"
+        workspace_dir = config.get_workspace_path("srt_files")
+        clip_dir = workspace_dir / "clip"
         
         if not clip_dir.exists():
             return None
@@ -520,8 +523,8 @@ class MultiCommentaryPanel(ttk.Frame):
 
     def _find_latest_video_file(self):
         """自动查找最新的视频文件"""
-        workspace_dir = Path("C:/Users/leidc/Desktop/workspace")
-        videos_dir = workspace_dir / "videos"
+        workspace_dir =config.get_workspace_path("videos")
+        videos_dir = workspace_dir
         
         if not videos_dir.exists():
             return None
