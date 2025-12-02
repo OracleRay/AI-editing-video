@@ -74,17 +74,18 @@ class MultiCommentaryPanel(ttk.Frame):
         )
         desc.pack(anchor=tk.W, pady=(5, 0))
         
-        # 中间内容区域（三列布局：左-文件选择/按钮，中-视频预览，右-日志）
+        # 中间内容区域（两列布局：左-文件选择/按钮，右-视频预览+日志）
         content_frame = ttk.Frame(container)
         content_frame.pack(fill=tk.BOTH, expand=True)
-        content_frame.grid_columnconfigure(0, weight=0, minsize=280)  # 左侧：文件选择和按钮
-        content_frame.grid_columnconfigure(1, weight=0, minsize=380)  # 中间：视频预览
-        content_frame.grid_columnconfigure(2, weight=1)  # 右侧：日志（自动扩展）
+        content_frame.grid_columnconfigure(0, weight=1, minsize=350)  # 左侧：文件选择和按钮（可扩展）
+        content_frame.grid_columnconfigure(1, weight=2)  # 右侧：视频预览+日志
         content_frame.grid_rowconfigure(0, weight=1)
         
         # ========== 左侧：文件选择和参数设置（带滚动条）==========
         left_container = ttk.Frame(content_frame)
         left_container.grid(row=0, column=0, sticky='nsew', padx=(0, 10), pady=0)
+        left_container.grid_rowconfigure(0, weight=1)
+        left_container.grid_columnconfigure(0, weight=1)
         
         # 创建Canvas和Scrollbar
         left_canvas = tk.Canvas(
@@ -122,9 +123,9 @@ class MultiCommentaryPanel(ttk.Frame):
         left_canvas.bind("<MouseWheel>", on_mousewheel)
         left_frame.bind("<MouseWheel>", on_mousewheel)
         
-        # 布局Canvas和Scrollbar
-        left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 布局Canvas和Scrollbar（先pack滚动条，再pack Canvas）
         left_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         left_canvas.configure(yscrollcommand=left_scrollbar.set)
         
         # 文件选择区域
@@ -283,36 +284,31 @@ class MultiCommentaryPanel(ttk.Frame):
         )
         self.process_btn.pack(fill=tk.X)
         
-        # ========== 中间：视频预览 ==========
-        middle_frame = ttk.Frame(content_frame)
-        middle_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=0)
-        middle_frame.grid_rowconfigure(0, weight=1)
+        # ========== 右侧：视频预览 + 处理日志 ==========
+        right_frame = ttk.Frame(content_frame)
+        right_frame.grid(row=0, column=1, sticky='nsew', padx=(10, 0), pady=0)
+        right_frame.grid_rowconfigure(1, weight=1)  # 日志区域可扩展
+        right_frame.grid_columnconfigure(0, weight=1)
         
         # 视频预览标签框
-        preview_label_frame = ttk.LabelFrame(middle_frame, text=" 视频预览 ", padding=15)
-        preview_label_frame.grid(row=0, column=0, sticky='nsew', padx=0, pady=0)
-        preview_label_frame.grid_rowconfigure(0, weight=1)
-        preview_label_frame.grid_columnconfigure(0, weight=1)
+        preview_label_frame = ttk.LabelFrame(right_frame, text=" 视频预览 ", padding=15)
+        preview_label_frame.grid(row=0, column=0, sticky='ew', padx=0, pady=(0, 10))
         
         # 视频预览组件容器（用于居中）
         preview_container = ttk.Frame(preview_label_frame)
-        preview_container.grid(row=0, column=0, sticky='', padx=0, pady=10)
+        preview_container.pack(pady=10)
         
         # 视频预览组件
         self.video_preview = VideoPreviewWidget(
             preview_container,
-            width=360,
-            height=200
+            width=280,
+            height=160
         )
         self.video_preview.pack()
         
-        # ========== 右侧：处理结果 ==========
-        right_frame = ttk.Frame(content_frame)
-        right_frame.grid(row=0, column=2, sticky='nsew', padx=(10, 0), pady=0)
-        
         # 结果显示标签框
         result_label_frame = ttk.LabelFrame(right_frame, text=" 处理日志 ", padding=15)
-        result_label_frame.pack(fill=tk.BOTH, expand=True)
+        result_label_frame.grid(row=1, column=0, sticky='nsew', padx=0, pady=0)
         
         # 结果文本框
         result_frame = tk.Frame(result_label_frame, bg=self.COLORS['text_bg'])

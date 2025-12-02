@@ -244,3 +244,187 @@ class VideoPreviewWidget(tk.Frame):
         self.video_path = None
         self._show_placeholder()
 
+
+class MultiVideoPreviewWidget(tk.Frame):
+    """多视频预览组件 - 支持显示多个视频的缩略图"""
+    
+    def __init__(self, parent, width=360, height=200, thumb_size=(120, 68), **kwargs):
+        super().__init__(parent, **kwargs)
+        
+        self.width = width
+        self.height = height
+        self.thumb_size = thumb_size
+        self.video_paths = []
+        self.thumbnails = []  # 保持引用防止被垃圾回收
+        
+        # 配置框架样式
+        self.config(
+            bg='#F2ECE3',
+            relief=tk.FLAT,
+            bd=0
+        )
+        
+        # 创建带滚动条的画布
+        self.canvas = tk.Canvas(
+            self,
+            width=width,
+            height=height,
+            bg='#F2ECE3',
+            highlightthickness=0,
+            relief=tk.FLAT
+        )
+        
+        self.scrollbar = tk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # 创建内部框架
+        self.inner_frame = tk.Frame(self.canvas, bg='#F2ECE3')
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.inner_frame, anchor='nw')
+        
+        # 布局
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 绑定事件
+        self.inner_frame.bind('<Configure>', self._on_frame_configure)
+        self.canvas.bind('<Configure>', self._on_canvas_configure)
+        self.canvas.bind('<MouseWheel>', self._on_mousewheel)
+        self.inner_frame.bind('<MouseWheel>', self._on_mousewheel)
+        
+        # 创建标签显示视频数量
+        self.count_label = tk.Label(
+            self,
+            text="",
+            font=("微软雅黑", 9),
+            fg="#5B5955",
+            bg='#F2ECE3'
+        )
+        self.count_label.pack(pady=5)
+        
+        # 显示占位图
+        self._show_placeholder()
+    
+    def _on_frame_configure(self, event):
+        self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+    
+    def _on_canvas_configure(self, event):
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+    
+    def _on_mousewheel(self, event):
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    
+    def _show_placeholder(self, text: str = "未选择视频"):
+        """显示占位图"""
+        # 清除内部框架
+        for widget in self.inner_frame.winfo_children():
+            widget.destroy()
+        self.thumbnails.clear()
+        
+        placeholder = VideoThumbnailExtractor.create_placeholder(
+            (self.width - 20, self.height - 20),
+            text
+        )
+        photo = ImageTk.PhotoImage(placeholder)
+        self.thumbnails.append(photo)
+        
+        label = tk.Label(self.inner_frame, image=photo, bg='#F2ECE3')
+        label.pack(padx=5, pady=5)
+        self.count_label.config(text="")
+    
+    def load_videos(self, video_paths: list):
+        """
+        加载多个视频并显示缩略图
+        
+        Args:
+            video_paths: 视频文件路径列表
+        """
+        self.video_paths = video_paths
+        
+        # 清除现有内容
+        for widget in self.inner_frame.winfo_children():
+            widget.destroy()
+        self.thumbnails.clear()
+        
+        if not video_paths:
+            self._show_placeholder()
+            return
+        
+        # 显示加载中
+        self._show_placeholder("加载中...")
+        self.update()
+        
+        # 清除加载提示
+        for widget in self.inner_frame.winfo_children():
+            widget.destroy()
+        self.thumbnails.clear()
+        
+        # 计算每行可放几个缩略图
+        cols = max(1, (self.width - 20) // (self.thumb_size[0] + 10))
+        
+        # 创建缩略图网格
+        for idx, video_path in enumerate(video_paths):
+            row = idx // cols
+            col = idx % cols
+            
+            # 创建单个视频预览框架
+            frame = tk.Frame(self.inner_frame, bg='#F2ECE3')
+            frame.grid(row=row, column=col, padx=5, pady=5)
+            
+            # 提取缩略图
+            thumbnail = VideoThumbnailExtractor.extract_thumbnail(
+                video_path,
+                self.thumb_size
+            )
+            
+            if thumbnail:
+                photo = ImageTk.PhotoImage(thumbnail)
+                self.thumbnails.append(photo)
+                
+                img_label = tk.Label(frame, image=photo, bg='#F2ECE3')
+                img_label.pack()
+            else:
+                # 显示失败占位符
+                placeholder = VideoThumbnailExtractor.create_placeholder(
+                    self.thumb_size,
+                    "加载失败"
+                )
+                photo = ImageTk.PhotoImage(placeholder)
+                self.thumbnails.append(photo)
+                
+                img_label = tk.Label(frame, image=photo, bg='#F2ECE3')
+                img_label.pack()
+            
+            # 显示文件名（截断）
+            video_name = Path(video_path).stem
+            if len(video_name) > 12:
+                video_name = video_name[:10] + "..."
+            
+            name_label = tk.Label(
+                frame,
+                text=video_name,
+                font=("微软雅黑", 8),
+                fg="#5B5955",
+                bg='#F2ECE3',
+                wraplength=self.thumb_size[0]
+            )
+            name_label.pack()
+        
+        # 更新数量标签
+        self.count_label.config(text=f"共 {len(video_paths)} 个视频")
+        
+        # 滚动到顶部
+        self.canvas.yview_moveto(0)
+    
+    def load_video(self, video_path: str):
+        """
+        加载单个视频（兼容单视频模式）
+        
+        Args:
+            video_path: 视频文件路径
+        """
+        self.load_videos([video_path] if video_path else [])
+    
+    def clear(self):
+        """清除预览"""
+        self.video_paths = []
+        self._show_placeholder()

@@ -43,11 +43,15 @@ class VideoProcessingApp:
     
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("AI 视频处理工具")
-        self.root.geometry("1200x750")
+        self.root.title("AI 视频剪辑工具")
+        
+        # 先隐藏窗口，避免闪烁
+        self.root.withdraw()
+        
+        self.root.geometry("1000x750")
         self.root.iconbitmap("../resources/ui/icon.ico")
         
-        # 设置最小窗口大小（三列布局需要更宽的空间）
+        # 设置最小窗口大小（两列布局）
         self.root.minsize(1100, 650)
         
         # 设置背景色
@@ -61,6 +65,9 @@ class VideoProcessingApp:
         
         # 居中显示窗口
         self._center_window()
+        
+        # 显示窗口
+        self.root.deiconify()
     
     def _setup_style(self):
         """设置现代化主题样式"""
