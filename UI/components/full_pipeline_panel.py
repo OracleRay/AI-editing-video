@@ -38,6 +38,7 @@ class FullPipelinePanel(ttk.Frame):
         super().__init__(parent)
         self.pipeline_service = PipelineService()
         self.video_path = None
+        self.video_paths = []  # 存储多个视频路径（文件夹模式）
         self.progress_line_start = None  # 记录进度行的起始位置
         self.export_dir_var = tk.StringVar(value="")
         
@@ -70,17 +71,18 @@ class FullPipelinePanel(ttk.Frame):
         )
         desc.pack(anchor=tk.W, pady=(5, 0))
         
-        # 中间内容区域（三列布局：左-文件选择/按钮，中-视频预览，右-日志）
+        # 中间内容区域（两列布局：左-文件选择/按钮，右-视频预览+日志）
         content_frame = ttk.Frame(container)
         content_frame.pack(fill=tk.BOTH, expand=True)
-        content_frame.grid_columnconfigure(0, weight=0, minsize=280)  # 左侧：文件选择和按钮
-        content_frame.grid_columnconfigure(1, weight=0, minsize=380)  # 中间：视频预览
-        content_frame.grid_columnconfigure(2, weight=1)  # 右侧：日志（自动扩展）
+        content_frame.grid_columnconfigure(0, weight=1, minsize=350)  # 左侧：文件选择和按钮（可扩展）
+        content_frame.grid_columnconfigure(1, weight=2)  # 右侧：视频预览+日志
         content_frame.grid_rowconfigure(0, weight=1)
         
         # ========== 左侧：文件选择和按钮（带滚动条）==========
         left_container = ttk.Frame(content_frame)
         left_container.grid(row=0, column=0, sticky='nsew', padx=(0, 10), pady=0)
+        left_container.grid_rowconfigure(0, weight=1)
+        left_container.grid_columnconfigure(0, weight=1)
         
         # 创建Canvas和Scrollbar
         left_canvas = tk.Canvas(
@@ -118,23 +120,36 @@ class FullPipelinePanel(ttk.Frame):
         left_canvas.bind("<MouseWheel>", on_mousewheel)
         left_frame.bind("<MouseWheel>", on_mousewheel)
         
-        # 布局Canvas和Scrollbar
-        left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 布局Canvas和Scrollbar（先pack滚动条，再pack Canvas）
         left_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         left_canvas.configure(yscrollcommand=left_scrollbar.set)
         
         # 操作按钮区域
         button_frame = ttk.LabelFrame(left_frame, text=" 操作 ", padding=15)
         button_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # 选择视频按钮
+        # 选择按钮区域（两个按钮并排）
+        select_btn_frame = ttk.Frame(button_frame)
+        select_btn_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 选择视频文件按钮
         select_btn = ttk.Button(
-            button_frame,
-            text="📁 选择视频文件",
+            select_btn_frame,
+            text="🎬 选择文件",
             command=self._select_video,
             style='TButton'
         )
-        select_btn.pack(fill=tk.X, pady=(0, 10))
+        select_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # 选择文件夹按钮
+        select_folder_btn = ttk.Button(
+            select_btn_frame,
+            text="📁 选择文件夹",
+            command=self._select_folder,
+            style='TButton'
+        )
+        select_folder_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # 开始处理按钮
         self.process_btn = ttk.Button(
@@ -233,36 +248,31 @@ class FullPipelinePanel(ttk.Frame):
             )
             step_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # ========== 中间：视频预览 ==========
-        middle_frame = ttk.Frame(content_frame)
-        middle_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=0)
-        middle_frame.grid_rowconfigure(0, weight=1)
+        # ========== 右侧：视频预览 + 处理日志 ==========
+        right_frame = ttk.Frame(content_frame)
+        right_frame.grid(row=0, column=1, sticky='nsew', padx=(10, 0), pady=0)
+        right_frame.grid_rowconfigure(1, weight=1)  # 日志区域可扩展
+        right_frame.grid_columnconfigure(0, weight=1)
         
         # 视频预览标签框
-        preview_label_frame = ttk.LabelFrame(middle_frame, text=" 视频预览 ", padding=15)
-        preview_label_frame.grid(row=0, column=0, sticky='nsew', padx=0, pady=0)
-        preview_label_frame.grid_rowconfigure(0, weight=1)
-        preview_label_frame.grid_columnconfigure(0, weight=1)
+        preview_label_frame = ttk.LabelFrame(right_frame, text=" 视频预览 ", padding=15)
+        preview_label_frame.grid(row=0, column=0, sticky='ew', padx=0, pady=(0, 10))
         
         # 视频预览组件容器（用于居中）
         preview_container = ttk.Frame(preview_label_frame)
-        preview_container.grid(row=0, column=0, sticky='', padx=0, pady=10)
+        preview_container.pack(pady=10)
         
         # 视频预览组件
         self.video_preview = VideoPreviewWidget(
             preview_container,
-            width=360,
-            height=200
+            width=280,
+            height=160
         )
         self.video_preview.pack()
         
-        # ========== 右侧：处理结果 ==========
-        right_frame = ttk.Frame(content_frame)
-        right_frame.grid(row=0, column=2, sticky='nsew', padx=(10, 0), pady=0)
-        
         # 结果显示标签框
         result_label_frame = ttk.LabelFrame(right_frame, text=" 处理日志 ", padding=15)
-        result_label_frame.pack(fill=tk.BOTH, expand=True)
+        result_label_frame.grid(row=1, column=0, sticky='nsew', padx=0, pady=0)
         
         # 结果文本框
         result_frame = tk.Frame(result_label_frame, bg=self.COLORS['text_bg'])
@@ -291,7 +301,7 @@ class FullPipelinePanel(ttk.Frame):
         self._log_result("💡 请选择要处理的视频文件...\n")
     
     def _select_video(self):
-        """选择视频文件"""
+        """选择单个视频文件"""
         file_path = filedialog.askopenfilename(
             title="选择视频文件",
             filetypes=[
@@ -302,6 +312,7 @@ class FullPipelinePanel(ttk.Frame):
         
         if file_path:
             self.video_path = file_path
+            self.video_paths = [file_path]  # 单文件模式
             
             # 加载视频预览
             self.video_preview.load_video(file_path)
@@ -313,6 +324,42 @@ class FullPipelinePanel(ttk.Frame):
             self._log_result(f"\n✅ 已选择视频文件\n")
             self._log_result(f"   路径: {file_path}\n")
             self._log_result(f"   大小: {self._get_file_size(file_path)}\n\n")
+    
+    def _select_folder(self):
+        """选择视频文件夹"""
+        folder_path = filedialog.askdirectory(title="选择视频文件夹")
+        
+        if folder_path:
+            folder = Path(folder_path)
+            # 查找所有视频文件
+            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
+            video_files = []
+            for ext in video_extensions:
+                video_files.extend(folder.glob(f'*{ext}'))
+                video_files.extend(folder.glob(f'*{ext.upper()}'))
+            
+            # 去重并排序
+            video_files = sorted(set(video_files), key=lambda x: x.name)
+            
+            if video_files:
+                self.video_paths = [str(f) for f in video_files]
+                self.video_path = self.video_paths[0]  # 兼容单文件处理
+                
+                # 加载第一个视频的预览
+                self.video_preview.load_video(self.video_paths[0])
+                
+                # 启用处理按钮
+                self.process_btn.config(state=tk.NORMAL)
+                
+                # 记录日志
+                self._log_result(f"\n✅ 已选择视频文件夹\n")
+                self._log_result(f"   路径: {folder_path}\n")
+                self._log_result(f"   共找到 {len(self.video_paths)} 个视频文件:\n")
+                for i, vp in enumerate(self.video_paths, 1):
+                    self._log_result(f"   {i}. {Path(vp).name}\n")
+                self._log_result("\n")
+            else:
+                self._log_result(f"\n⚠️ 文件夹中未找到视频文件: {folder_path}\n\n")
     
     def _get_file_size(self, file_path: str) -> str:
         """获取文件大小"""
@@ -331,16 +378,12 @@ class FullPipelinePanel(ttk.Frame):
     
     def _start_processing(self):
         """开始处理"""
-        if not self.video_path:
-            show_error_message(self.winfo_toplevel(), "请先选择视频文件")
+        if not self.video_paths:
+            show_error_message(self.winfo_toplevel(), "请先选择视频文件或文件夹")
             return
         if not self.export_dir_var.get().strip():
             show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
             return
-        
-        self._log_result("\n" + "="*60 + "\n")
-        self._log_result("🚀 开始执行完整处理流程...\n")
-        self._log_result("="*60 + "\n\n")
         
         # 重置进度行标记
         self.progress_line_start = None
@@ -348,17 +391,73 @@ class FullPipelinePanel(ttk.Frame):
         # 禁用按钮
         self.process_btn.config(state=tk.DISABLED)
         
-        # 在后台线程执行
+        # 在后台线程执行批量处理
         plot_params = self._collect_plot_params()
-        def run_pipeline():
-            return self.pipeline_service.run_full_pipeline(
-                self.video_path,
-                progress_callback=self._update_progress,
-                plot_params=plot_params,
-                export_target_dir=self.export_dir_var.get().strip()
-            )
         
-        ThreadExecutor.execute(run_pipeline, self._on_complete)
+        def run_batch_pipeline():
+            """批量处理所有视频"""
+            total = len(self.video_paths)
+            results = []
+            
+            for idx, video_path in enumerate(self.video_paths, 1):
+                video_name = Path(video_path).name
+                
+                # 更新视频预览为当前处理的视频
+                self.video_preview.after(0, lambda vp=video_path: self.video_preview.load_video(vp))
+                
+                # 更新主进度
+                self._log_batch_header(idx, total, video_name)
+                
+                # 处理单个视频（使用闭包捕获 idx）
+                def make_callback(current_idx):
+                    def single_progress_callback(msg, pct):
+                        if pct >= 0:
+                            overall = int(((current_idx - 1) / total + pct / 100 / total) * 100)
+                            self._update_progress(f"[{current_idx}/{total}] {msg}", overall)
+                    return single_progress_callback
+                
+                # 使用 try-except 包装，确保单个视频失败不会中断整体流程
+                try:
+                    result = self.pipeline_service.run_full_pipeline(
+                        video_path,
+                        progress_callback=make_callback(idx),
+                        plot_params=plot_params,
+                        export_target_dir=self.export_dir_var.get().strip()
+                    )
+                except Exception as e:
+                    # 捕获未预期的异常，记录错误并继续
+                    result = {
+                        'success': False,
+                        'error': f"未预期的错误: {str(e)}"
+                    }
+                
+                result['video_name'] = video_name
+                result['video_index'] = idx
+                results.append(result)
+                
+                # 如果当前视频处理失败，记录日志并继续下一个
+                if not result.get('success'):
+                    error_msg = result.get('error', '未知错误')
+                    self.result_text.after(0, lambda msg=error_msg, name=video_name: 
+                        self._log_result(f"\n❌ [{name}] 处理失败: {msg}\n⏭️ 继续处理下一个视频...\n"))
+            
+            return {
+                'success': all(r.get('success') for r in results),
+                'results': results,
+                'total': total,
+                'success_count': sum(1 for r in results if r.get('success')),
+                'message': f"批量处理完成: {sum(1 for r in results if r.get('success'))}/{total} 成功"
+            }
+        
+        ThreadExecutor.execute(run_batch_pipeline, self._on_batch_complete)
+    
+    def _log_batch_header(self, current: int, total: int, video_name: str):
+        """记录批量处理的分隔日志"""
+        self.result_text.after(0, lambda: self._log_result(
+            f"\n{'='*60}\n"
+            f"🎬 [{current}/{total}] 正在处理: {video_name}\n"
+            f"{'='*60}\n\n"
+        ))
     
     def _update_progress(self, message: str, percent: int):
         """更新进度"""
@@ -387,7 +486,7 @@ class FullPipelinePanel(ttk.Frame):
                 self.progress_line_start = None
     
     def _on_complete(self, result: dict):
-        """处理完成"""
+        """单个视频处理完成"""
         # 重置进度行标记
         self.progress_line_start = None
         
@@ -411,6 +510,61 @@ class FullPipelinePanel(ttk.Frame):
             error_msg = result.get("error", "未知错误")
             self._log_result(f"\n❌ 处理失败: {error_msg}\n")
             show_error_message(self.winfo_toplevel(), error_msg)
+    
+    def _on_batch_complete(self, result: dict):
+        """批量处理完成"""
+        # 重置进度行标记
+        self.progress_line_start = None
+        
+        # 启用按钮
+        self.process_btn.config(state=tk.NORMAL)
+        
+        results = result.get('results', [])
+        total = result.get('total', 0)
+        success_count = result.get('success_count', 0)
+        failed_results = [r for r in results if not r.get('success')]
+        
+        self._log_result("\n" + "="*60 + "\n")
+        self._log_result("📊 批量处理汇总\n")
+        self._log_result("="*60 + "\n\n")
+        
+        # 输出成功的视频
+        self._log_result(f"✅ 成功 ({success_count}/{total}):\n")
+        for r in results:
+            if r.get('success'):
+                video_name = r.get('video_name', '未知')
+                idx = r.get('video_index', 0)
+                self._log_result(f"  [{idx}] {video_name}\n")
+                self._log_result(f"      剪辑视频: {r.get('edited_video', 'N/A')}\n")
+                desktop_project = r.get('desktop_project_path')
+                if desktop_project:
+                    self._log_result(f"      导出目录: {desktop_project}\n")
+        
+        # 输出失败的视频及详细错误信息
+        if failed_results:
+            self._log_result(f"\n❌ 失败 ({len(failed_results)}/{total}):\n")
+            self._log_result("-" * 50 + "\n")
+            for r in failed_results:
+                video_name = r.get('video_name', '未知')
+                idx = r.get('video_index', 0)
+                error_msg = r.get('error', '未知错误')
+                self._log_result(f"  [{idx}] {video_name}\n")
+                self._log_result(f"      错误详情: {error_msg}\n\n")
+            self._log_result("-" * 50 + "\n")
+        
+        # 最终统计
+        self._log_result(f"\n🎉 处理完成: {success_count}/{total} 成功")
+        if failed_results:
+            self._log_result(f", {len(failed_results)} 失败")
+        self._log_result("\n")
+        self._log_result("="*60 + "\n")
+        
+        # 只有全部失败时才弹窗提示
+        if success_count == 0 and total > 0:
+            show_error_message(
+                self.winfo_toplevel(), 
+                f"所有视频处理失败，请查看日志了解详情"
+            )
     
     def _log_result(self, message: str):
         """记录结果到文本框"""
