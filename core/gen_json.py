@@ -182,11 +182,10 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
     
     # === 创建音频素材和片段 ===
     audio_materials = []
-    audio_segments_with_track = []  # [(segment, track_index, start, end), ...]
-    audio_timings = []  # 记录音频的实际播放时段 [(start, end), ...]
+    audio_segments = []  # 音频片段列表（单轨道连续排列）
+    audio_video_mapping = []  # 记录音频和原视频的时间映射 [(target_start, target_end, source_start, source_end), ...]
     
-    # 用于追踪每个轨道的最后结束时间
-    track_end_times = []  # [end_time_of_track_0, end_time_of_track_1, ...]
+    audio_target_time = 0  # 音频在目标时间轴上的当前位置
     
     for i, (start_us, end_us, text) in enumerate(clips):
         audio_file = audio_pattern.format(i + 1)
@@ -230,89 +229,50 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
             "wave_points": []
         })
         
-        # 计算当前音频的时间范围
-        audio_start = start_us
-        audio_end = start_us + real_audio_duration
-        
-        # 查找可以放置当前音频的轨道（不重叠的轨道）
-        track_index = -1
-        for idx, track_end in enumerate(track_end_times):
-            if audio_start >= track_end:  # 当前音频开始时间 >= 该轨道的结束时间，无重叠
-                track_index = idx
-                track_end_times[idx] = audio_end  # 更新该轨道的结束时间
-                break
-        
-        # 如果没有找到合适的轨道，创建新轨道
-        if track_index == -1:
-            track_index = len(track_end_times)
-            track_end_times.append(audio_end)
-        
-        # 音频片段（从字幕开始时间播放，使用真实时长）
+        # 音频片段（连续排列在目标时间轴上）
         segment = create_base_segment()
         segment.update({
             "id": gen_id(),
             "material_id": audio_mat_id,
-            "target_timerange": {"start": start_us, "duration": real_audio_duration},  # 真实时长
-            "source_timerange": {"start": 0, "duration": real_audio_duration},  # 真实时长
+            "target_timerange": {"start": audio_target_time, "duration": real_audio_duration},  # 连续排列
+            "source_timerange": {"start": 0, "duration": real_audio_duration},  # 从音频文件开头播放
             "volume": 1.0,
             "extra_material_refs": [],
-            "track_render_index": track_index  # 设置轨道索引
+            "track_render_index": 0  # 单轨道
         })
-        audio_segments_with_track.append((segment, track_index, audio_start, audio_end))
+        audio_segments.append(segment)
         
-        # 记录音频实际播放的时段
-        audio_timings.append((start_us, start_us + real_audio_duration))
+        # 记录音频和原视频的时间映射关系
+        audio_video_mapping.append((
+            audio_target_time,  # 目标开始时间
+            audio_target_time + real_audio_duration,  # 目标结束时间
+            start_us,  # 原视频开始时间
+            start_us + real_audio_duration  # 原视频结束时间（实际可能超出，但我们只取音频时长）
+        ))
+        
+        # 更新音频目标时间
+        audio_target_time += real_audio_duration
     
-    # === 创建视频片段（音频时静音，间隙时原声）===
+    # === 创建视频片段（音频时静音，音频结束后剪掉剩余部分）===
     video_segments = []
-    current_time = 0
     
-    for audio_start, audio_end in audio_timings:
-        # 如果当前时间小于音频开始时间，说明有间隙，播放原声
-        if current_time < audio_start:
-            gap_segment = create_base_segment()
-            gap_duration = audio_start - current_time
-            gap_segment.update({
-                "id": gen_id(),
-                "material_id": video_mat_id,
-                "target_timerange": {"start": current_time, "duration": gap_duration},
-                "source_timerange": {"start": current_time, "duration": gap_duration},
-                "volume": 1.0,  # 间隙播放原声
-                "extra_material_refs": [speed_id],
-                "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000}
-            })
-            video_segments.append(gap_segment)
-        
-        # 音频播放时段，视频静音（使用音频的实际时长）
-        audio_duration = audio_end - audio_start
+    for target_start, target_end, source_start, source_end in audio_video_mapping:
+        # 音频播放时段，视频静音
+        duration = target_end - target_start
         mute_segment = create_base_segment()
         mute_segment.update({
             "id": gen_id(),
             "material_id": video_mat_id,
-            "target_timerange": {"start": audio_start, "duration": audio_duration},
-            "source_timerange": {"start": audio_start, "duration": audio_duration},
+            "target_timerange": {"start": target_start, "duration": duration},
+            "source_timerange": {"start": source_start, "duration": duration},  # 从原视频对应位置取素材
             "volume": 0.0,  # 音频播放时视频静音
             "extra_material_refs": [speed_id],
             "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000}
         })
         video_segments.append(mute_segment)
-        
-        current_time = audio_end
     
-    # 如果最后还有剩余时间，播放原声
-    if current_time < total_duration:
-        final_segment = create_base_segment()
-        final_duration = total_duration - current_time
-        final_segment.update({
-            "id": gen_id(),
-            "material_id": video_mat_id,
-            "target_timerange": {"start": current_time, "duration": final_duration},
-            "source_timerange": {"start": current_time, "duration": final_duration},
-            "volume": 1.0,  # 最后的间隙播放原声
-            "extra_material_refs": [speed_id],
-            "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000}
-        })
-        video_segments.append(final_segment)
+    # 重新计算总时长为所有音频的总时长
+    total_duration = audio_target_time
     
     video_track = {
         "attribute": 0,
@@ -324,24 +284,19 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
         "type": "video"
     }
     
-    # === 创建音频轨道（根据轨道数量创建多个轨道）===
-    num_tracks = len(track_end_times)
+    # === 创建音频轨道（单轨道连续排列）===
     audio_tracks = []
     
-    for track_idx in range(num_tracks):
-        # 收集该轨道上的所有片段
-        track_segments = [seg for seg, idx, _, _ in audio_segments_with_track if idx == track_idx]
-        
-        audio_track = {
-            "attribute": 0,
-            "flag": 0,
-            "id": gen_id(),
-            "is_default_name": True if track_idx == 0 else False,
-            "name": "" if track_idx == 0 else f"音频轨道{track_idx + 1}",
-            "segments": track_segments,
-            "type": "audio"
-        }
-        audio_tracks.append(audio_track)
+    audio_track = {
+        "attribute": 0,
+        "flag": 0,
+        "id": gen_id(),
+        "is_default_name": True,
+        "name": "",
+        "segments": audio_segments,
+        "type": "audio"
+    }
+    audio_tracks.append(audio_track)
     
     # === 检测视频宽高比 ===
     aspect_ratio = get_video_aspect_ratio(video_abs_path)
@@ -384,23 +339,23 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
         json.dump(meta_info, f, ensure_ascii=False, indent=4)
     
     logger.info(f"剪映项目文件已生成: {output_abs_dir}")
-    logger.info(f"视频片段: {len(video_segments)} 个 | 音频片段: {len(audio_segments_with_track)} 个 | 总时长: {total_duration / 1000000:.2f} 秒")
+    logger.info(f"视频片段: {len(video_segments)} 个 | 音频片段: {len(audio_segments)} 个 | 总时长: {total_duration / 1000000:.2f} 秒")
 
 if __name__ == "__main__":
-    generate_audio_from_srt(
-        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/test.txt",
-        reference_audio="resources/src/audios/xiao_shuai/爆款小帅男声.MP3",
-        output_dir="C:/Users/leidc/Desktop/workspace/audios/test/",
-        model=config.get('tts.model'),
-        speed=config.get('tts.speed')
-    )
-    logger.info(f"✅ 音频生成完成!")
+    # generate_audio_from_srt(
+    #     srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_161337.txt",
+    #     reference_audio="resources/src/audios/xiao_shuai/爆款小帅男声.MP3",
+    #     output_dir="C:/Users/leidc/Desktop/workspace/audios/test/",
+    #     model=config.get('tts.model'),
+    #     speed=config.get('tts.speed')
+    # )
+    # logger.info(f"✅ 音频生成完成!")
 
     # 生成剪映项目文件
     generate_capcut_project(
-        video_file="C:/Users/leidc/Desktop/workspace/videos/20251126_164351.mp4",
+        video_file="C:/Users/leidc/Desktop/workspace/videos/20251201_161337.mp4",
         audio_pattern=str("C:/Users/leidc/Desktop/workspace/audios/test/" + Path(config.get('audio.pattern')).name),
-        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/test.txt",
+        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_161337.txt",
         output_dir="C:/Users/leidc/Desktop/workspace/json/test/"
     )
     logger.info(f"✅ 剪映项目生成完成!")
