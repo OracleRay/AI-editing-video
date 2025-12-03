@@ -13,11 +13,6 @@ audio:
   # 音频输出目录
   output_dir: "audios"
 
-# ==================== 字幕配置 ====================
-srt_file:
-  # SRT字幕文件路径
-  jieShuo_example: "resources/src/srt_files/金婚风雨情.srt"
-
 # ==================== 输出配置 ====================
 output:
   # 剪映项目JSON文件输出目录
