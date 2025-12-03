@@ -55,6 +55,9 @@ def cut_video_clips(video_file, clips, temp_dir):
     """根据时间戳剪切视频片段"""
     os.makedirs(temp_dir, exist_ok=True)
     
+    # Windows 下隐藏命令行窗口
+    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    
     clip_files = []
     for i, (start_sec, end_sec, text) in enumerate(clips):
         duration = end_sec - start_sec
@@ -75,7 +78,7 @@ def cut_video_clips(video_file, clips, temp_dir):
             output_file
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', creationflags=creation_flags)
         if result.returncode != 0:
             continue
         
@@ -93,6 +96,9 @@ def concat_video_clips(clip_files, output_file):
             abs_path = os.path.abspath(clip_file).replace("\\", "/")
             f.write(f"file '{abs_path}'\n")
     
+    # Windows 下隐藏命令行窗口
+    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    
     # 使用ffmpeg拼接视频
     cmd = [
         FFMPEG_PATH,
@@ -104,7 +110,7 @@ def concat_video_clips(clip_files, output_file):
         output_file
     ]
     
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', creationflags=creation_flags)
     if result.returncode != 0:
         return False
     
@@ -113,6 +119,9 @@ def concat_video_clips(clip_files, output_file):
 def get_video_info(video_file):
     """获取视频信息(时长、宽高)"""
     try:
+        # Windows 下隐藏命令行窗口
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        
         # 获取时长
         result = subprocess.run(
             [FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration',
@@ -121,7 +130,8 @@ def get_video_info(video_file):
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            errors='ignore'
+            errors='ignore',
+            creationflags=creation_flags
         )
         duration_seconds = float(result.stdout.strip())
         duration_us = int(duration_seconds * 1000000)
@@ -135,7 +145,8 @@ def get_video_info(video_file):
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            errors='ignore'
+            errors='ignore',
+            creationflags=creation_flags
         )
         width, height = map(int, result.stdout.strip().split('x'))
         

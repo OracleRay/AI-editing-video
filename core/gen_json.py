@@ -95,12 +95,15 @@ def get_audio_duration(audio_path):
     """获取音频文件的实际时长（微秒）"""
     try:
         ffprobe_abs_path = config.get_absolute_path(FFPROBE_PATH)
+        # Windows 下隐藏命令行窗口
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         result = subprocess.run(
             [ffprobe_abs_path, '-v', 'error', '-show_entries', 'format=duration',
              '-of', 'default=noprint_wrappers=1:nokey=1', audio_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            creationflags=creation_flags
         )
         duration_seconds = float(result.stdout.strip())
         return int(duration_seconds * 1000000)  # 转换为微秒
@@ -111,12 +114,15 @@ def get_video_aspect_ratio(video_path):
     """获取视频文件的宽高比，返回'16:9'或'4:3'，如果无法获取则返回None"""
     try:
         ffprobe_abs_path = config.get_absolute_path(FFPROBE_PATH)
+        # Windows 下隐藏命令行窗口
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         result = subprocess.run(
             [ffprobe_abs_path, '-v', 'error', '-select_streams', 'v:0',
              '-show_entries', 'stream=width,height', '-of', 'csv=p=0', video_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            creationflags=creation_flags
         )
         
         if result.returncode == 0:

@@ -1,5 +1,6 @@
 import numpy as np
 import subprocess
+import os
 
 def get_high_volume_intervals(audio_path, interval_sec=6, chunk_length_ms=100):
     """
@@ -30,8 +31,9 @@ def get_high_volume_intervals(audio_path, interval_sec=6, chunk_length_ms=100):
         "-"
     ]
     
-    # 执行ffmpeg并获取音频数据
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    # 执行ffmpeg并获取音频数据（Windows 下隐藏命令行窗口）
+    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=creation_flags)
     samples = np.frombuffer(result.stdout, dtype=np.int16)
     
     # 计算分块参数

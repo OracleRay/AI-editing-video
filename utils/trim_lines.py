@@ -106,8 +106,9 @@ def analyze_audio_segment(audio_path, start_time, end_time, chunk_length_ms=100)
         "-"
     ]
     
-    # 执行ffmpeg并获取音频数据
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    # 执行ffmpeg并获取音频数据（Windows 下隐藏命令行窗口）
+    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=creation_flags)
     samples = np.frombuffer(result.stdout, dtype=np.int16)
     
     if len(samples) == 0:
