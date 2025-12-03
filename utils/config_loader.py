@@ -4,9 +4,29 @@
 """
 
 import os
+import sys
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+
+def get_base_path() -> Path:
+    """
+    获取程序运行的基础路径（项目根目录）
+    
+    - 如果是 PyInstaller 打包后的 exe，返回 exe 所在目录
+    - 如果是开发环境，返回项目根目录
+    
+    Returns:
+        基础路径 Path 对象
+    """
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后的 exe 环境
+        # sys.executable 是 exe 文件的完整路径
+        return Path(sys.executable).parent
+    else:
+        # 开发环境：基于当前文件位置
+        return Path(__file__).resolve().parent.parent
 
 
 class ConfigLoader:
@@ -29,9 +49,8 @@ class ConfigLoader:
     
     def _load_config(self):
         """加载配置文件"""
-        # 获取项目根目录
-        current_file = Path(__file__).resolve()
-        project_root = current_file.parent.parent
+        # 获取项目根目录（支持打包环境）
+        project_root = get_base_path()
         
         # 配置文件路径
         self._config_path = project_root / "configs" / "config.yaml"
@@ -106,12 +125,12 @@ class ConfigLoader:
     
     def get_project_root(self) -> Path:
         """
-        获取项目根目录
+        获取项目根目录（支持打包环境）
         
         Returns:
             项目根目录路径
         """
-        return Path(__file__).resolve().parent.parent
+        return get_base_path()
     
     def get_absolute_path(self, relative_path: str) -> str:
         """

@@ -4,11 +4,20 @@ Dify API 基类
 """
 
 import os
+import sys
 import yaml
 import json
 import requests
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+
+def _get_base_path() -> Path:
+    """获取程序基础路径（支持打包环境）"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).resolve().parent.parent
 
 
 class DifyClient:
@@ -43,9 +52,8 @@ class DifyClient:
         Returns:
             配置字典
         """
-        # 获取项目根目录
-        current_file = Path(__file__).resolve()
-        project_root = current_file.parent.parent
+        # 获取项目根目录（支持打包环境）
+        project_root = _get_base_path()
         
         # Dify 配置文件路径
         config_path = project_root / "configs" / "dify.yaml"

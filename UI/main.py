@@ -11,8 +11,15 @@ from tkinter import ttk
 import sys
 from pathlib import Path
 
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent
+# 添加项目根目录到路径（支持打包环境）
+def _get_base_path() -> Path:
+    """获取程序基础路径"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).resolve().parent.parent
+
+project_root = _get_base_path()
 sys.path.insert(0, str(project_root))
 
 # 初始化日志系统（只打印一次）
@@ -49,7 +56,10 @@ class VideoProcessingApp:
         self.root.withdraw()
         
         self.root.geometry("1000x750")
-        self.root.iconbitmap("../resources/ui/icon.ico")
+        # 设置图标（使用动态路径）
+        icon_path = project_root / "resources" / "ui" / "icon.ico"
+        if icon_path.exists():
+            self.root.iconbitmap(str(icon_path))
         
         # 设置最小窗口大小（两列布局）
         self.root.minsize(1100, 650)

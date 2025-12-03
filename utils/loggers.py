@@ -8,7 +8,14 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-from utils.config_loader import ConfigLoader
+
+
+def _get_base_path() -> Path:
+    """获取程序基础路径（支持打包环境）"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).resolve().parent.parent
 
 
 class ColoredFormatter(logging.Formatter):
@@ -74,30 +81,17 @@ def setup_logger(
     
     # 确定日志目录：如果未指定，使用项目根目录下的logs
     if log_dir is None:
-        # 获取项目根目录（通过ConfigLoader）
-        try:
-            config = ConfigLoader()
-            project_root = config.get_project_root()
-            log_path = project_root / "logs"
-        except Exception:
-            # 如果ConfigLoader失败，回退到基于文件路径的方式
-            current_file = Path(__file__).resolve()
-            project_root = current_file.parent.parent
-            log_path = project_root / "logs"
+        # 获取项目根目录（支持打包环境）
+        project_root = _get_base_path()
+        log_path = project_root / "logs"
     else:
         # 如果指定了log_dir，检查是否是绝对路径
         if Path(log_dir).is_absolute():
             log_path = Path(log_dir)
         else:
             # 相对路径也基于项目根目录
-            try:
-                config = ConfigLoader()
-                project_root = config.get_project_root()
-                log_path = project_root / log_dir
-            except Exception:
-                current_file = Path(__file__).resolve()
-                project_root = current_file.parent.parent
-                log_path = project_root / log_dir
+            project_root = _get_base_path()
+            log_path = project_root / log_dir
     
     # 创建日志目录
     log_path.mkdir(parents=True, exist_ok=True)

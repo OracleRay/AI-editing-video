@@ -7,8 +7,15 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent.parent
+# 添加项目根目录到路径（支持打包环境）
+def _get_base_path() -> Path:
+    """获取程序基础路径"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).resolve().parent.parent.parent
+
+project_root = _get_base_path()
 sys.path.insert(0, str(project_root))
 
 from step import (
