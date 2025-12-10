@@ -5,6 +5,7 @@ import os
 import uuid
 import subprocess
 import sys
+import random
 from pathlib import Path
 
 # 添加utils目录到路径
@@ -13,11 +14,35 @@ from services.tts_client import parse_srt as tts_parse_srt, process_subtitle, en
 from utils.config_loader import get_config, get_workspace_path
 from utils.meta_json import *
 from utils.loggers import get_logger
+from utils.subtitle_detector import detect_subtitle_position
+from utils.gen_jieShuo_srt import batch_convert_mp3_to_srt
 
 # === 加载配置 ===
 config = get_config()
 FFPROBE_PATH = config.get('ffmpeg.ffprobe_path')
 logger = get_logger('gen_json', silent=True)
+
+# === 转场配置 ===
+TRANSITION_CONFIGS = [
+    {
+        "name": "横移模糊",
+        "resource_id": "7316901787762430491",
+        "effect_id": "36950128",
+        "duration": 500000
+    },
+    {
+        "name": "推近 II",
+        "resource_id": "7290852476259930685",
+        "effect_id": "26135688",
+        "duration": 500000
+    },
+    {
+        "name": "回忆拉屏 II",
+        "resource_id": "7306440470119322139",
+        "effect_id": "31456359",
+        "duration": 300000
+    }
+]
 
 
 def generate_audio_from_srt(srt_file, reference_audio, output_dir, model, speed):
@@ -167,7 +192,21 @@ def get_canvas_dimensions(aspect_ratio):
         return 1920, 1080  # 16:9 标准分辨率
 
 # === 生成项目文件 ===
-def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
+def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
+                            ocr_confidence=0.4, audio_dir=None, subtitle_dir=None):
+    """
+    生成剪映项目文件
+    
+    Args:
+        video_file: 视频文件路径
+        audio_pattern: 音频文件模式
+        srt_file: 字幕文件路径
+        output_dir: 输出目录
+        enable_subtitle_mask: 是否启用字幕蒙版（模糊效果）
+        ocr_confidence: OCR置信度阈值（0.0-1.0），默认0.5
+        audio_dir: 包含多个音频文件的目录（可选），会自动转换为字幕并添加到项目中
+        subtitle_dir: 字幕输出基础目录（可选），传递给 batch_convert_mp3_to_srt 作为 output_base_dir
+    """
     # 将相对路径转换为绝对路径
     srt_abs_path = config.get_absolute_path(srt_file)
     clips = parse_srt(srt_abs_path)
@@ -261,21 +300,63 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
     
     # === 创建视频片段（音频时静音，音频结束后剪掉剩余部分）===
     video_segments = []
+    transition_materials = []  # 存储所有转场材料
+    transition_ids = []  # 存储每个片段对应的转场ID（最后一个片段无转场）
     
-    for target_start, target_end, source_start, source_end in audio_video_mapping:
+    logger.info("=" * 60)
+    logger.info("🎬 开始添加转场效果")
+    logger.info("=" * 60)
+    
+    total_segments = len(audio_video_mapping)
+    
+    for idx, (target_start, target_end, source_start, source_end) in enumerate(audio_video_mapping):
+        # 隔一个片段添加转场（idx为偶数时添加：0, 2, 4, 6...，且不是最后一个片段）
+        if idx < total_segments - 1 and idx % 2 == 0:
+            # 随机选择一个转场
+            transition_config = random.choice(TRANSITION_CONFIGS)
+            transition_id = gen_id()
+            
+            # 创建转场材料
+            transition_material = create_transition(
+                transition_id=transition_id,
+                name=transition_config["name"],
+                resource_id=transition_config["resource_id"],
+                effect_id=transition_config["effect_id"],
+                duration=transition_config["duration"]
+            )
+            transition_materials.append(transition_material)
+            transition_ids.append(transition_id)
+            
+            logger.info(f"✅ 片段 {idx+1} → {idx+2}: {transition_config['name']} ({transition_config['duration']/1000000:.2f}秒)")
+        else:
+            transition_ids.append(None)  # 奇数片段或最后一个片段无转场
+        
         # 音频播放时段，视频静音
         duration = target_end - target_start
         mute_segment = create_base_segment()
+        
+        # 构建 extra_material_refs（如果有转场，转场ID在最前面）
+        extra_refs = []
+        if transition_ids[idx]:
+            extra_refs.append(transition_ids[idx])
+        extra_refs.append(speed_id)
+        
         mute_segment.update({
             "id": gen_id(),
             "material_id": video_mat_id,
             "target_timerange": {"start": target_start, "duration": duration},
             "source_timerange": {"start": source_start, "duration": duration},  # 从原视频对应位置取素材
             "volume": 0.0,  # 音频播放时视频静音
-            "extra_material_refs": [speed_id],
-            "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000}
+            "extra_material_refs": extra_refs,
+            "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000},
+            "track_render_index": 0  # 主视频轨道（在底层）
         })
         video_segments.append(mute_segment)
+    
+    if transition_materials:
+        logger.info("")
+        logger.info(f"✅ 转场效果添加完成（隔一个片段添加）")
+        logger.info(f"   总片段: {total_segments} 个 | 转场数: {len(transition_materials)} 个")
     
     # 重新计算总时长为所有音频的总时长
     total_duration = audio_target_time
@@ -311,9 +392,200 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
         logger.warning(f"无法获取视频宽高比，使用默认值: {aspect_ratio}")
     else:
         logger.info(f"检测到视频宽高比: {aspect_ratio}")
-    
+
     # 获取对应的画布尺寸
     canvas_width, canvas_height = get_canvas_dimensions(aspect_ratio)
+    
+    # === 检测字幕位置（用于字幕定位和蒙版）===
+    subtitle_position_y = -0.75  # 默认位置（底部）
+    subtitle_position = None
+    
+    logger.info("=" * 60)
+    logger.info("🔍 开始字幕位置检测")
+    logger.info("=" * 60)
+    try:
+        # 使用新的字幕检测逻辑
+        subtitle_position = detect_subtitle_position(
+            video_path=video_abs_path,
+            num_frames=30  # 检测30帧
+        )
+
+        if subtitle_position:
+            logger.info("=" * 60)
+            logger.info("✅ 字幕位置检测成功")
+            logger.info("=" * 60)
+            logger.info(f"   中心点坐标: ({subtitle_position['center_x']}, {subtitle_position['center_y']})")
+            logger.info(f"   字幕高度: {subtitle_position['height']} 像素")
+            
+            # 将像素坐标转换为剪映坐标系统（用于字幕位置）
+            normalized_y = subtitle_position['center_y'] / canvas_height
+            subtitle_position_y = 1 - (normalized_y * 2)
+            logger.info(f"   剪映坐标 Y: {subtitle_position_y:.3f}")
+        else:
+            logger.warning("❌ 字幕检测失败，使用默认位置")
+    except Exception as e:
+        logger.error(f"字幕位置检测失败: {e}")
+        logger.warning("将使用默认字幕位置")
+        import traceback
+        logger.error(traceback.format_exc())
+    
+    # === 创建字幕材料和轨道 ===
+    text_materials = []
+    text_tracks = []
+    
+    if audio_dir:
+        logger.info("=" * 60)
+        logger.info("📝 开始处理字幕")
+        logger.info("=" * 60)
+        try:
+            subtitle_output_dir = batch_convert_mp3_to_srt(audio_dir, subtitle_dir)
+
+            subtitle_path = Path(subtitle_output_dir)
+            srt_files = sorted([str(f) for f in subtitle_path.glob("*.srt")])
+            
+            # 解析字幕文件并创建字幕片段
+            text_segments = []
+            logger.info("")
+
+            for idx, (target_start, target_end, source_start, source_end) in enumerate(audio_video_mapping):
+                # 每个音频片段对应一个字幕文件
+                if idx >= len(srt_files):
+                    logger.warning(f"⚠️  音频片段 [{idx+1}] 没有对应的字幕文件")
+                    break
+
+                srt_file_path = srt_files[idx]
+                logger.info(f"📄 [{idx+1}/{len(audio_video_mapping)}] {Path(srt_file_path).name}")
+
+                # 解析字幕文件
+                srt_clips = parse_srt(srt_file_path)
+
+                if not srt_clips:
+                    logger.warning(f"   ⚠️  字幕文件为空，跳过")
+                    continue
+
+                # 为每个字幕行创建材料和片段
+                for sub_start, sub_end, sub_text in srt_clips:
+                    text_id = gen_id()
+
+                    # 计算字幕在时间轴上的位置（相对于当前音频片段）
+                    subtitle_start = target_start + sub_start
+                    subtitle_duration = sub_end - sub_start
+
+                    # 确保字幕不超出音频片段范围
+                    if subtitle_start + subtitle_duration > target_end:
+                        subtitle_duration = target_end - subtitle_start
+
+                    if subtitle_duration <= 0:
+                        continue
+
+                    # 创建字幕材料
+                    text_material = create_text_material(
+                        text_id=text_id,
+                        text_content=sub_text.strip()
+                    )
+                    text_materials.append(text_material)
+
+                    # 创建字幕片段（使用检测到的位置）
+                    text_segment = create_text_segment(
+                        text_id=text_id,
+                        start_time=subtitle_start,
+                        duration=subtitle_duration,
+                        position_y=subtitle_position_y
+                    )
+                    text_segments.append(text_segment)
+
+                logger.info(f"   ✅ 添加了 {len(srt_clips)} 个字幕")
+            
+            # 在循环外创建字幕轨道（只创建一个轨道，包含所有字幕片段）
+            if text_segments:
+                text_track = {
+                    "attribute": 0,
+                    "flag": 0,
+                    "id": gen_id(),
+                    "is_default_name": True,
+                    "name": "",
+                    "segments": text_segments,
+                    "type": "text"
+                }
+                text_tracks.append(text_track)
+                logger.info("")
+                logger.info(f"✅ 字幕轨道创建成功")
+                logger.info(f"   总字幕数: {len(text_segments)}")
+                logger.info(f"   字幕材料数: {len(text_materials)}")
+                
+        except Exception as e:
+            logger.error(f"字幕处理失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    # === 创建字幕蒙版和模糊效果 ===
+    mask_material = None
+    blur_effect_material = None
+    background_video_segments = []  # 背景视频轨道（带模糊和蒙版）
+
+    if subtitle_position:
+        try:
+            # 创建蒙版材料
+            mask_id = gen_id()
+            mask_material = create_rectangle_mask(
+                mask_id=mask_id,
+                subtitle_center_y=subtitle_position['center_y'],
+                subtitle_height=subtitle_position['height'],
+                canvas_height=canvas_height
+            )
+
+            # 创建模糊特效材料
+            blur_effect_id = gen_id()
+            blur_effect_material = create_blur_effect(blur_effect_id, intensity=80.0)
+
+            # === 创建背景视频轨道（复制主轨道的片段，并添加模糊和蒙版）===
+            for idx, (target_start, target_end, source_start, source_end) in enumerate(audio_video_mapping):
+                duration = target_end - target_start
+                bg_segment = create_base_segment()
+                
+                # 构建 extra_material_refs（如果有转场，转场ID在最前面）
+                bg_extra_refs = []
+                if transition_ids[idx]:
+                    bg_extra_refs.append(transition_ids[idx])
+                bg_extra_refs.extend([speed_id, blur_effect_id, mask_id])
+                
+                bg_segment.update({
+                    "id": gen_id(),
+                    "material_id": video_mat_id,
+                    "target_timerange": {"start": target_start, "duration": duration},
+                    "source_timerange": {"start": source_start, "duration": duration},
+                    "volume": 0.0,  # 背景视频静音
+                    "extra_material_refs": bg_extra_refs,  # 引用转场、特效和蒙版
+                    "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000},
+                    "track_render_index": 0  # 背景轨道（在上层）
+                })
+                background_video_segments.append(bg_segment)
+
+        except Exception as e:
+            logger.error(f"创建字幕蒙版失败: {e}")
+            logger.warning("将不使用字幕蒙版功能")
+            import traceback
+            logger.error(traceback.format_exc())
+    else:
+        logger.info("⚠️  跳过字幕蒙版创建（字幕检测未成功）")
+
+    # === 创建视频轨道 ===
+    all_video_tracks = []
+    
+    # 主视频轨道（在底层，干净的视频）
+    all_video_tracks.append(video_track)
+    
+    # 背景视频轨道（在上层，带模糊和蒙版）
+    background_track = {
+        "attribute": 0,
+        "flag": 0,
+        "id": gen_id(),
+        "is_default_name": False,
+        "name": "背景视频轨道（模糊蒙版）",
+        "segments": background_video_segments,
+        "type": "video"
+    }
+    all_video_tracks.append(background_track)
 
     # === 组装项目 ===
     project = generate_project_data(
@@ -322,13 +594,18 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
         total_duration=total_duration,
         project_id=project_id,
         audio_materials=audio_materials,
-        video_track=video_track,
+        video_tracks=all_video_tracks,  # 传入所有视频轨道
         audio_tracks=audio_tracks,
         video_filename=video_filename,
         video_abs_path=video_abs_path,
         aspect_ratio=aspect_ratio,
         canvas_width=canvas_width,
-        canvas_height=canvas_height
+        canvas_height=canvas_height,
+        mask_material=mask_material,
+        blur_effect_material=blur_effect_material,
+        text_materials=text_materials,
+        text_tracks=text_tracks,
+        transition_materials=transition_materials  # 传入转场材料
     )
     
     # === 生成元数据 ===
@@ -346,10 +623,14 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir):
     
     logger.info(f"剪映项目文件已生成: {output_abs_dir}")
     logger.info(f"视频片段: {len(video_segments)} 个 | 音频片段: {len(audio_segments)} 个 | 总时长: {total_duration / 1000000:.2f} 秒")
+    logger.info(f"视频轨道数: {len(all_video_tracks)} | 音频轨道数: {len(audio_tracks)} | 字幕轨道数: {len(text_tracks)}")
+    if text_tracks and text_tracks[0]['segments']:
+        logger.info(f"字幕片段: {len(text_tracks[0]['segments'])} 个")
+    logger.info(f"转场效果: {len(transition_materials)} 个")
 
 if __name__ == "__main__":
     # generate_audio_from_srt(
-    #     srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_161337.txt",
+    #     srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_131444.txt",
     #     reference_audio="resources/src/audios/xiao_shuai/爆款小帅男声.MP3",
     #     output_dir="C:/Users/leidc/Desktop/workspace/audios/test/",
     #     model=config.get('tts.model'),
@@ -357,11 +638,14 @@ if __name__ == "__main__":
     # )
     # logger.info(f"✅ 音频生成完成!")
 
-    # 生成剪映项目文件
+    # 生成剪映项目文件（自动转换音频为字幕）
     generate_capcut_project(
-        video_file="C:/Users/leidc/Desktop/workspace/videos/20251201_161337.mp4",
-        audio_pattern=str("C:/Users/leidc/Desktop/workspace/audios/test/" + Path(config.get('audio.pattern')).name),
-        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_161337.txt",
-        output_dir="C:/Users/leidc/Desktop/workspace/json/test/"
+        video_file="C:/Users/leidc/Desktop/workspace/videos/20251201_131444.mp4",
+        audio_pattern=str("C:/Users/leidc/Desktop/workspace/audios/20251201_132114/" + Path(config.get('audio.pattern')).name),
+        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_132114.txt",
+        output_dir="C:/Users/leidc/Desktop/workspace/json/test/",
+        audio_dir="C:/Users/leidc/Desktop/workspace/audios/20251201_132114/",  # 音频目录
+        subtitle_dir="C:/Users/leidc/Desktop/workspace/srt_files/subtitles"  # 字幕基础目录
     )
+    
     logger.info(f"✅ 剪映项目生成完成!")
