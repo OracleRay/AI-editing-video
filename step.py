@@ -93,9 +93,10 @@ def step2_audio_to_subtitles(audio_output_path: Path, video_src_path: Path) -> D
         logger.info(f"⏭️  字幕文件已存在，跳过转换:")
         logger.info(f"   - SRT: {srt_output_path}")
     else:
-        # 调用语音识别API转录音频
-        api_url = "http://116.211.238.68:8881/api/v1/transcribe"
-        transcription_result = transcribe_audio(str(audio_output_path), api_url)
+        # 调用语音识别API转录音频（从配置文件读取）
+        api_url = config.get('audio_to_subtitles.api_url', 'http://116.211.238.68:8881/api/v1/transcribe')
+        api_key = config.get('audio_to_subtitles.api_key', None)
+        transcription_result = transcribe_audio(str(audio_output_path), api_url, api_key)
         
         # 生成SRT字幕文件
         create_srt(transcription_result, str(srt_output_path))
@@ -332,7 +333,10 @@ def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -
         video_file=edited_video,
         audio_pattern=audio_pattern_for_run,
         srt_file=commentary_srt_file,
-        output_dir=json_run_dir
+        output_dir=json_run_dir,
+        ocr_confidence=0.4,
+        audio_dir=audio_abs_dir,  # 自动为音频生成字幕并添加到项目中
+        subtitle_dir=str(get_workspace_path("srt_files/subtitles"))
     )
     logger.info(f"✅ 剪映项目生成完成: {json_run_dir}")
     
