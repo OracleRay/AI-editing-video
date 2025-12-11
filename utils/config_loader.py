@@ -154,7 +154,7 @@ class ConfigLoader:
 
     def get_workspace_path(self, relative_path: str = "") -> Path:
         """
-        获取工作空间根目录
+        获取工作空间根目录（自动使用桌面路径下的 workspace 目录）
         
         Args:
             relative_path: 相对路径，如果提供则返回相对于此路径的绝对路径
@@ -162,11 +162,10 @@ class ConfigLoader:
         Returns:
             工作空间根目录路径
         """
-        workspace_base_dir = self.get("workspace.base_dir")
-        if not workspace_base_dir:
-            raise ValueError("配置文件中未找到 workspace.base_dir 配置")
+        # 自动使用桌面路径下的 workspace 目录
+        workspace_root = Path.home() / "Desktop" / "workspace"
         
-        workspace_root = Path(workspace_base_dir)
+        # 如果目录不存在则创建
         if not workspace_root.exists():
             workspace_root.mkdir(parents=True)
         

@@ -46,21 +46,6 @@ tts:
     interval_sec: 2.0
     timeout_sec: 300
 
-# ==================== 项目配置 ====================
-project:
-  # 画布配置
-  canvas:
-    width: 1920
-    height: 1080
-    ratio: "16:9"
-  # 帧率
-  fps: 30
-
-# ==================== Workspace配置 ====================
-workspace:
-  # 基础工作目录
-  base_dir: "C:/Users/leidc/Desktop/workspace"
-
 # ==================== 音频转字幕 API 配置 ====================
 audio_to_subtitles:
   # API 地址
