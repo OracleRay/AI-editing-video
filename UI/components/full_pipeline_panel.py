@@ -161,36 +161,14 @@ class FullPipelinePanel(ttk.Frame):
         # 开始处理按钮
         self.process_btn = ttk.Button(
             button_frame,
-            text="▶️ 开始完整处理",
+            text="▶️ 开始单次处理",
             command=self._start_processing,
             style='Accent.TButton',
             state=tk.DISABLED
         )
         self.process_btn.pack(fill=tk.X, pady=(0, 10))
         
-        # 分隔线
-        separator = ttk.Separator(button_frame, orient=tk.HORIZONTAL)
-        separator.pack(fill=tk.X, pady=10)
-        
         # 循环处理区域
-        loop_header_frame = ttk.Frame(button_frame)
-        loop_header_frame.pack(fill=tk.X, pady=(0, 8))
-        
-        ttk.Label(
-            loop_header_frame,
-            text="🔄 循环处理",
-            font=("微软雅黑", 9, "bold"),
-            foreground=self.COLORS['fg']
-        ).pack(side=tk.LEFT)
-        
-        ttk.Label(
-            loop_header_frame,
-            text="(自动重复处理多次)",
-            font=("微软雅黑", 8),
-            foreground=self.COLORS['text_gray']
-        ).pack(side=tk.LEFT, padx=(5, 0))
-        
-        # 循环次数选择区域
         loop_control_frame = ttk.Frame(button_frame)
         loop_control_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -201,7 +179,7 @@ class FullPipelinePanel(ttk.Frame):
         ).pack(side=tk.LEFT, padx=(0, 8))
         
         # 循环次数变量
-        self.loop_count_var = tk.IntVar(value=2)
+        self.loop_count_var = tk.IntVar(value=3)
         
         # 次数选择器（使用 Spinbox）
         self.loop_spinbox = ttk.Spinbox(
@@ -214,43 +192,16 @@ class FullPipelinePanel(ttk.Frame):
         )
         self.loop_spinbox.pack(side=tk.LEFT, padx=(0, 8))
         
-        ttk.Label(
-            loop_control_frame,
-            text="次",
-            font=("微软雅黑", 9)
-        ).pack(side=tk.LEFT)
-        
         # 循环处理按钮
         self.loop_process_btn = ttk.Button(
-            button_frame,
+            loop_control_frame,
             text="🔄 开始循环处理",
             command=self._start_loop_processing,
             style='Accent.TButton',
             state=tk.DISABLED
         )
-        self.loop_process_btn.pack(fill=tk.X)
+        self.loop_process_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # 解说参数区域
-        commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数（可选） ", padding=15)
-        commentary_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            commentary_frame,
-            text="剧情梗概:",
-            font=("微软雅黑", 9)
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        self.plot_text = tk.Text(
-            commentary_frame,
-            height=4,
-            wrap=tk.WORD,
-            bg=self.COLORS['text_bg'],
-            fg=self.COLORS['fg'],
-            insertbackground=self.COLORS['fg'],
-            relief=tk.FLAT
-        )
-        self.plot_text.pack(fill=tk.X, pady=(0, 10))
-        
         # 导出目录
         export_frame = ttk.LabelFrame(left_frame, text=" 剪映导出目录 ", padding=15)
         export_frame.pack(fill=tk.X, pady=(0, 15))
@@ -275,6 +226,27 @@ class FullPipelinePanel(ttk.Frame):
             text="选择目录",
             command=self._select_export_dir
         ).pack(side=tk.RIGHT)
+        
+        # 解说参数区域
+        commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数（可选） ", padding=15)
+        commentary_frame.pack(fill=tk.X, pady=(0, 15))
+
+        ttk.Label(
+            commentary_frame,
+            text="剧情梗概:",
+            font=("微软雅黑", 9)
+        ).pack(anchor=tk.W, pady=(0, 5))
+
+        self.plot_text = tk.Text(
+            commentary_frame,
+            height=4,
+            wrap=tk.WORD,
+            bg=self.COLORS['text_bg'],
+            fg=self.COLORS['fg'],
+            insertbackground=self.COLORS['fg'],
+            relief=tk.FLAT
+        )
+        self.plot_text.pack(fill=tk.X, pady=(0, 10))
         
         # 流程说明
         info_frame = ttk.LabelFrame(left_frame, text=" 流程说明 ", padding=10)

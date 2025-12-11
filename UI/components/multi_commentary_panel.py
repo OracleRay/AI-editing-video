@@ -233,27 +233,6 @@ class MultiCommentaryPanel(ttk.Frame):
             foreground=self.COLORS['text_gray']
         ).pack(side=tk.LEFT, padx=5)
 
-        # 解说参数区域
-        commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数（可选） ", padding=15)
-        commentary_frame.pack(fill=tk.X, pady=(0, 15))
-
-        ttk.Label(
-            commentary_frame,
-            text="剧情梗概:",
-            font=("微软雅黑", 9)
-        ).pack(anchor=tk.W, pady=(0, 5))
-
-        self.plot_text = tk.Text(
-            commentary_frame,
-            height=4,
-            wrap=tk.WORD,
-            bg=self.COLORS['text_bg'],
-            fg=self.COLORS['fg'],
-            insertbackground=self.COLORS['fg'],
-            relief=tk.FLAT
-        )
-        self.plot_text.pack(fill=tk.X, pady=(0, 10))
-        
         # 导出目录
         export_frame = ttk.LabelFrame(left_frame, text=" 剪映导出目录 ", padding=15)
         export_frame.pack(fill=tk.X, pady=(0, 15))
@@ -278,6 +257,27 @@ class MultiCommentaryPanel(ttk.Frame):
             text="选择目录",
             command=self._select_export_dir
         ).pack(side=tk.RIGHT)
+        
+        # 解说参数区域
+        commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数（可选） ", padding=15)
+        commentary_frame.pack(fill=tk.X, pady=(0, 15))
+
+        ttk.Label(
+            commentary_frame,
+            text="剧情梗概:",
+            font=("微软雅黑", 9)
+        ).pack(anchor=tk.W, pady=(0, 5))
+
+        self.plot_text = tk.Text(
+            commentary_frame,
+            height=4,
+            wrap=tk.WORD,
+            bg=self.COLORS['text_bg'],
+            fg=self.COLORS['fg'],
+            insertbackground=self.COLORS['fg'],
+            relief=tk.FLAT
+        )
+        self.plot_text.pack(fill=tk.X, pady=(0, 10))
         
         # 操作按钮
         button_frame = ttk.LabelFrame(left_frame, text=" 操作 ", padding=15)
