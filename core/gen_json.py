@@ -135,8 +135,8 @@ def get_audio_duration(audio_path):
     except Exception as e:
         return None
 
-def get_video_aspect_ratio(video_path):
-    """获取视频文件的宽高比，返回'16:9'或'4:3'，如果无法获取则返回None"""
+def get_video_dimensions(video_path):
+    """获取视频文件的真实宽度和高度，返回 (width, height, aspect_ratio_name)"""
     try:
         ffprobe_abs_path = config.get_absolute_path(FFPROBE_PATH)
         # Windows 下隐藏命令行窗口
@@ -156,40 +156,41 @@ def get_video_aspect_ratio(video_path):
                 width = int(dimensions[0])
                 height = int(dimensions[1])
                 
-                # 计算宽高比
+                # 计算宽高比并判断类型（用于显示）
                 ratio = width / height
+                aspect_ratio_name = get_aspect_ratio_name(ratio)
                 
-                # 判断比例（允许一定的误差范围）
-                if 1.3 <= ratio <= 1.4:  # 4:3 ≈ 1.333
-                    return "4:3"
-                elif 1.7 <= ratio <= 1.8:  # 16:9 ≈ 1.777
-                    return "16:9"
-                elif 1.2 <= ratio <= 1.3:  # 5:4 ≈ 1.25
-                    return "5:4"
-                elif 0.7 <= ratio <= 0.8:  # 9:16 ≈ 0.5625 (竖屏)
-                    return "9:16"
-                else:
-                    # 对于其他比例，返回最接近的标准比例
-                    if abs(ratio - 1.333) < abs(ratio - 1.777):
-                        return "4:3"
-                    else:
-                        return "16:9"
+                return width, height, aspect_ratio_name
         
-        return None
+        return None, None, None
     except Exception as e:
-        logger.error(f"获取视频宽高比失败: {e}")
-        return None
+        logger.error(f"获取视频尺寸失败: {e}")
+        return None, None, None
 
-def get_canvas_dimensions(aspect_ratio):
-    """根据宽高比返回画布尺寸"""
-    if aspect_ratio == "4:3":
-        return 1440, 1080  # 4:3 标准分辨率
-    elif aspect_ratio == "5:4":
-        return 1280, 1024  # 5:4 标准分辨率
-    elif aspect_ratio == "9:16":
-        return 1080, 1920  # 竖屏9:16
-    else:  # 默认16:9
-        return 1920, 1080  # 16:9 标准分辨率
+def get_aspect_ratio_name(ratio):
+    """根据宽高比数值判断比例名称"""
+    if 1.3 <= ratio <= 1.4:  # 4:3 ≈ 1.333
+        return "4:3"
+    elif 1.7 <= ratio <= 1.8:  # 16:9 ≈ 1.777
+        return "16:9"
+    elif 2.3 <= ratio <= 2.4:  # 21:9 ≈ 2.333 (电影超宽屏)
+        return "21:9"
+    elif 1.2 <= ratio <= 1.3:  # 5:4 ≈ 1.25
+        return "5:4"
+    elif 0.55 <= ratio <= 0.65:  # 9:16 ≈ 0.5625 (竖屏)
+        return "9:16"
+    elif 0.42 <= ratio <= 0.48:  # 9:21 ≈ 0.428 (竖屏电影)
+        return "9:21"
+    else:
+        # 对于其他比例，返回最接近的标准比例
+        ratios = {
+            "4:3": abs(ratio - 1.333),
+            "16:9": abs(ratio - 1.777),
+            "21:9": abs(ratio - 2.333),
+            "9:16": abs(ratio - 0.5625),
+            "9:21": abs(ratio - 0.428)
+        }
+        return min(ratios, key=ratios.get)
 
 # === 生成项目文件 ===
 def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
@@ -385,16 +386,15 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
     }
     audio_tracks.append(audio_track)
     
-    # === 检测视频宽高比 ===
-    aspect_ratio = get_video_aspect_ratio(video_abs_path)
-    if aspect_ratio is None:
-        aspect_ratio = "16:9"  # 默认使用16:9
-        logger.warning(f"无法获取视频宽高比，使用默认值: {aspect_ratio}")
+    # === 获取视频真实尺寸 ===
+    canvas_width, canvas_height, aspect_ratio = get_video_dimensions(video_abs_path)
+    if canvas_width is None or canvas_height is None:
+        # 无法获取，使用默认值
+        canvas_width, canvas_height = 1920, 1080
+        aspect_ratio = "16:9"
+        logger.warning(f"无法获取视频尺寸，使用默认值: {canvas_width}x{canvas_height} ({aspect_ratio})")
     else:
-        logger.info(f"检测到视频宽高比: {aspect_ratio}")
-
-    # 获取对应的画布尺寸
-    canvas_width, canvas_height = get_canvas_dimensions(aspect_ratio)
+        logger.info(f"检测到视频尺寸: {canvas_width}x{canvas_height} ({aspect_ratio})")
     
     # === 检测字幕位置（用于字幕定位和蒙版）===
     subtitle_position_y = -0.75  # 默认位置（底部）
@@ -413,9 +413,6 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
         if subtitle_position:
             logger.info("=" * 60)
             logger.info("✅ 字幕位置检测成功")
-            logger.info("=" * 60)
-            logger.info(f"   中心点坐标: ({subtitle_position['center_x']}, {subtitle_position['center_y']})")
-            logger.info(f"   字幕高度: {subtitle_position['height']} 像素")
             
             # 将像素坐标转换为剪映坐标系统（用于字幕位置）
             normalized_y = subtitle_position['center_y'] / canvas_height
@@ -434,9 +431,6 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
     text_tracks = []
     
     if audio_dir:
-        logger.info("=" * 60)
-        logger.info("📝 开始处理字幕")
-        logger.info("=" * 60)
         try:
             subtitle_output_dir = batch_convert_mp3_to_srt(audio_dir, subtitle_dir)
 
@@ -529,7 +523,7 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
             mask_id = gen_id()
             mask_material = create_rectangle_mask(
                 mask_id=mask_id,
-                subtitle_center_y=subtitle_position['center_y'],
+                subtitle_center_y=subtitle_position_y,
                 subtitle_height=subtitle_position['height'],
                 canvas_height=canvas_height
             )

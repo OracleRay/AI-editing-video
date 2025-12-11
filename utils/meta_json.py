@@ -191,25 +191,15 @@ def create_rectangle_mask(mask_id, subtitle_center_y, subtitle_height, canvas_he
     # 像素坐标系：0（顶部）到 canvas_height（底部）
     
     center_x = 0  # 水平居中
-    
-    # 计算归一化的Y坐标（0-1，0是顶部，1是底部）
-    normalized_y = subtitle_center_y / canvas_height
-    # 转换为剪映坐标（-1到1，-1是底部，1是顶部）
-    center_y = 1 - (normalized_y * 2)
-    
-    # 蒙版宽度：默认覆盖70%的画布宽度
-    width = 0.7
-    
-    # 蒙版高度：字幕高度的1.5倍（留出一些边距），相对于画布的比例
-    height = (subtitle_height * 1.5) / canvas_height
+    width = 0.7  # 蒙版宽度：默认覆盖70%的画布宽度
     
     mask = {
         "config": {
             "aspectRatio": 1.0,
             "centerX": center_x,
-            "centerY": center_y,
+            "centerY": subtitle_center_y,
             "feather": 0.0,
-            "height": height,
+            "height": subtitle_height,
             "invert": False,
             "rotation": 0.0,
             "roundCorner": 0.0,
