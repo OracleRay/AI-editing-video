@@ -702,10 +702,6 @@ def detect_subtitle_position(video_path, num_frames=30):
         center_y = subtitle_stats.get('center_y')
         height = subtitle_stats.get('height')
         
-        # 记录结果
-        logger.info(f"中心点坐标: ({center_x}, {center_y})")
-        logger.info(f"字幕高度: {height} 像素")
-        
         # 构建返回的JSON
         result = {
             "center_x": center_x,

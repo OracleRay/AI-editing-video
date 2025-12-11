@@ -79,6 +79,9 @@ def setup_logger(
     if logger.handlers:
         return logger
     
+    # 防止日志传播到父logger（避免重复输出）
+    logger.propagate = False
+    
     # 确定日志目录：如果未指定，使用项目根目录下的logs
     if log_dir is None:
         # 获取项目根目录（支持打包环境）
