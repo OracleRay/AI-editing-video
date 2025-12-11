@@ -186,20 +186,16 @@ def create_rectangle_mask(mask_id, subtitle_center_y, subtitle_height, canvas_he
         蒙版材料字典（符合剪映实际格式）
     """
     
-    # 将像素坐标转换为剪映坐标系统
-    # 剪映坐标系：-1（底部）到 1（顶部），0（中心）
-    # 像素坐标系：0（顶部）到 canvas_height（底部）
-    
     center_x = 0  # 水平居中
     width = 0.7  # 蒙版宽度：默认覆盖70%的画布宽度
-    
+
     mask = {
         "config": {
             "aspectRatio": 1.0,
             "centerX": center_x,
             "centerY": subtitle_center_y,
             "feather": 0.0,
-            "height": subtitle_height,
+            "height": subtitle_height / canvas_height,
             "invert": False,
             "rotation": 0.0,
             "roundCorner": 0.0,
