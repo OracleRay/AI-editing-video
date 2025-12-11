@@ -28,11 +28,13 @@ ffmpeg:
 # ==================== TTS（文字转语音）配置 ====================
 tts:
   # 参考音频路径（用于声音克隆）
-  reference_audio: "resources/src/audios/xiao_mei/爆款小美女声.MP3"
+  reference_audio: "resources/src/audios/xiao_shuai/爆款小帅男声.MP3"
   # TTS模型名称
-  model: "Index-TTS"
+  model: "Index-TTS-2"
   # 音频倍速（1.0=原速，>1.0加快，<1.0减慢）
   speed: 1.1
+  # 音调
+  pitch: 1.2
   # API配置
   api:
     base_url: "http://116.211.238.68:18080"
@@ -58,4 +60,11 @@ project:
 workspace:
   # 基础工作目录
   base_dir: "C:/Users/leidc/Desktop/workspace"
+
+# ==================== 音频转字幕 API 配置 ====================
+audio_to_subtitles:
+  # API 地址
+  api_url: "http://116.211.238.68:18080/api/v1/fast_transcribe"
+  # API 密钥
+  api_key: "3BC34ACCCF0B1EA2815C40DF6D8AE265"
 

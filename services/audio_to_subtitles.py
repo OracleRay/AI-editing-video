@@ -9,9 +9,14 @@ from pathlib import Path
 # 添加utils目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loggers import get_logger
+from utils.config_loader import get_config
 
-# API 配置
-API_URL = "http://116.211.238.68:8881/api/v1/transcribe"
+# 加载配置
+config = get_config()
+
+# 从配置文件读取 API 配置
+API_URL = config.get('audio_to_subtitles.api_url', 'http://116.211.238.68:8881/api/v1/transcribe')
+API_KEY = config.get('audio_to_subtitles.api_key', None)
 
 # 日志记录器
 logger = get_logger('audio_to_subtitles', silent=True)
@@ -24,10 +29,11 @@ if sys.stdout is not None:
         pass
 
 
-def transcribe_audio(audio_path: str, api_url: str):
+def transcribe_audio(audio_path: str, api_url: str, api_key: str | None = None):
     """调用 API 转录音频文件"""
+    headers = {"X-API-KEY": api_key} if api_key else {}
     with open(audio_path, 'rb') as f:
-        resp = requests.post(api_url, files={'file': f})
+        resp = requests.post(api_url, files={'file': f}, headers=headers)
     if resp.status_code != 200:
         raise RuntimeError(f"API请求失败: {resp.status_code}\n{resp.text}")
     return resp.json()
@@ -59,7 +65,7 @@ def main():
 
     try:
         logger.info(f"正在转录: {audio_file.name}")
-        result = transcribe_audio(str(audio_file), API_URL)
+        result = transcribe_audio(str(audio_file), API_URL, API_KEY)
 
         create_srt(result, str(srt_file))
 
