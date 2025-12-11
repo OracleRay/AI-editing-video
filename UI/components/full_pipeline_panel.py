@@ -166,7 +166,69 @@ class FullPipelinePanel(ttk.Frame):
             style='Accent.TButton',
             state=tk.DISABLED
         )
-        self.process_btn.pack(fill=tk.X)
+        self.process_btn.pack(fill=tk.X, pady=(0, 10))
+        
+        # 分隔线
+        separator = ttk.Separator(button_frame, orient=tk.HORIZONTAL)
+        separator.pack(fill=tk.X, pady=10)
+        
+        # 循环处理区域
+        loop_header_frame = ttk.Frame(button_frame)
+        loop_header_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        ttk.Label(
+            loop_header_frame,
+            text="🔄 循环处理",
+            font=("微软雅黑", 9, "bold"),
+            foreground=self.COLORS['fg']
+        ).pack(side=tk.LEFT)
+        
+        ttk.Label(
+            loop_header_frame,
+            text="(自动重复处理多次)",
+            font=("微软雅黑", 8),
+            foreground=self.COLORS['text_gray']
+        ).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # 循环次数选择区域
+        loop_control_frame = ttk.Frame(button_frame)
+        loop_control_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(
+            loop_control_frame,
+            text="循环次数:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        
+        # 循环次数变量
+        self.loop_count_var = tk.IntVar(value=2)
+        
+        # 次数选择器（使用 Spinbox）
+        self.loop_spinbox = ttk.Spinbox(
+            loop_control_frame,
+            from_=2,
+            to=10,
+            textvariable=self.loop_count_var,
+            width=8,
+            font=("微软雅黑", 9)
+        )
+        self.loop_spinbox.pack(side=tk.LEFT, padx=(0, 8))
+        
+        ttk.Label(
+            loop_control_frame,
+            text="次",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT)
+        
+        # 循环处理按钮
+        self.loop_process_btn = ttk.Button(
+            button_frame,
+            text="🔄 开始循环处理",
+            command=self._start_loop_processing,
+            style='Accent.TButton',
+            state=tk.DISABLED
+        )
+        self.loop_process_btn.pack(fill=tk.X)
 
         # 解说参数区域
         commentary_frame = ttk.LabelFrame(left_frame, text=" 解说参数（可选） ", padding=15)
@@ -326,6 +388,7 @@ class FullPipelinePanel(ttk.Frame):
             
             # 启用处理按钮
             self.process_btn.config(state=tk.NORMAL)
+            self.loop_process_btn.config(state=tk.NORMAL)
             
             # 记录日志
             self._log_result(f"\n✅ 已选择视频文件\n")
@@ -357,6 +420,7 @@ class FullPipelinePanel(ttk.Frame):
                 
                 # 启用处理按钮
                 self.process_btn.config(state=tk.NORMAL)
+                self.loop_process_btn.config(state=tk.NORMAL)
                 
                 # 记录日志
                 self._log_result(f"\n✅ 已选择视频文件夹\n")
@@ -397,6 +461,7 @@ class FullPipelinePanel(ttk.Frame):
         
         # 禁用按钮
         self.process_btn.config(state=tk.DISABLED)
+        self.loop_process_btn.config(state=tk.DISABLED)
         
         # 在后台线程执行批量处理
         plot_params = self._collect_plot_params()
@@ -499,6 +564,7 @@ class FullPipelinePanel(ttk.Frame):
         
         # 启用按钮
         self.process_btn.config(state=tk.NORMAL)
+        self.loop_process_btn.config(state=tk.NORMAL)
         
         if result.get("success"):
             self._log_result("\n" + "="*60 + "\n")
@@ -525,6 +591,7 @@ class FullPipelinePanel(ttk.Frame):
         
         # 启用按钮
         self.process_btn.config(state=tk.NORMAL)
+        self.loop_process_btn.config(state=tk.NORMAL)
         
         results = result.get('results', [])
         total = result.get('total', 0)
@@ -596,3 +663,192 @@ class FullPipelinePanel(ttk.Frame):
             self.export_dir_var.set(selected)
             self.export_dir_display.config(text=selected)
             self._log_result(f"🗂️ 导出目录已设置为: {selected}\n")
+    
+    def _start_loop_processing(self):
+        """开始循环处理"""
+        if not self.video_paths:
+            show_error_message(self.winfo_toplevel(), "请先选择视频文件或文件夹")
+            return
+        if not self.export_dir_var.get().strip():
+            show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            return
+        
+        # 获取循环次数
+        loop_count = self.loop_count_var.get()
+        if loop_count < 2:
+            show_error_message(self.winfo_toplevel(), "循环次数至少为 2 次")
+            return
+        
+        # 重置进度行标记
+        self.progress_line_start = None
+        
+        # 禁用按钮
+        self.process_btn.config(state=tk.DISABLED)
+        self.loop_process_btn.config(state=tk.DISABLED)
+        
+        # 在后台线程执行循环批量处理
+        plot_params = self._collect_plot_params()
+        
+        def run_loop_batch_pipeline():
+            """循环批量处理所有视频"""
+            total_videos = len(self.video_paths)
+            all_loop_results = []  # 存储所有循环的结果
+            
+            # 记录循环开始
+            self.result_text.after(0, lambda: self._log_result(
+                f"\n{'='*60}\n"
+                f"🔄 开始循环处理：共 {loop_count} 轮，每轮 {total_videos} 个视频\n"
+                f"{'='*60}\n\n"
+            ))
+            
+            # 执行多轮循环
+            for loop_idx in range(1, loop_count + 1):
+                loop_results = []
+                
+                # 处理当前轮次的所有视频
+                for video_idx, video_path in enumerate(self.video_paths, 1):
+                    video_name = Path(video_path).name
+                    
+                    # 更新视频预览为当前处理的视频
+                    self.video_preview.after(0, lambda vp=video_path: self.video_preview.load_video(vp))
+                    
+                    # 更新主进度（考虑循环）
+                    overall_idx = (loop_idx - 1) * total_videos + video_idx
+                    overall_total = loop_count * total_videos
+                    
+                    self.result_text.after(0, lambda lidx=loop_idx, lc=loop_count, vidx=video_idx, vt=total_videos, vn=video_name: 
+                        self._log_result(
+                            f"\n{'='*60}\n"
+                            f"🎬 [轮次 {lidx}/{lc}] [视频 {vidx}/{vt}] 正在处理: {vn}\n"
+                            f"{'='*60}\n\n"
+                        ))
+                    
+                    # 处理单个视频（使用闭包捕获 overall_idx 和 overall_total）
+                    def make_loop_callback(current_idx, total):
+                        def single_progress_callback(msg, pct):
+                            if pct >= 0:
+                                overall = int(((current_idx - 1) / total + pct / 100 / total) * 100)
+                                self._update_progress(
+                                    f"[{current_idx}/{total}] {msg}", 
+                                    overall
+                                )
+                        return single_progress_callback
+                    
+                    # 使用 try-except 包装，确保单个视频失败不会中断整体流程
+                    try:
+                        result = self.pipeline_service.run_full_pipeline(
+                            video_path,
+                            progress_callback=make_loop_callback(overall_idx, overall_total),
+                            plot_params=plot_params,
+                            export_target_dir=self.export_dir_var.get().strip()
+                        )
+                    except Exception as e:
+                        # 捕获未预期的异常，记录错误并继续
+                        result = {
+                            'success': False,
+                            'error': f"未预期的错误: {str(e)}"
+                        }
+                    
+                    result['video_name'] = video_name
+                    result['video_index'] = video_idx
+                    result['loop_index'] = loop_idx
+                    loop_results.append(result)
+                    
+                    # 如果当前视频处理失败，记录日志并继续下一个
+                    if not result.get('success'):
+                        error_msg = result.get('error', '未知错误')
+                        self.result_text.after(0, lambda msg=error_msg, name=video_name, lidx=loop_idx: 
+                            self._log_result(f"\n❌ [轮次 {lidx}] [{name}] 处理失败: {msg}\n⏭️ 继续处理下一个视频...\n"))
+                
+                all_loop_results.extend(loop_results)
+                
+                # 轮次完成提示
+                loop_success = sum(1 for r in loop_results if r.get('success'))
+                self.result_text.after(0, lambda lidx=loop_idx, ls=loop_success, vt=total_videos: 
+                    self._log_result(
+                        f"\n✅ 第 {lidx} 轮循环完成: {ls}/{vt} 成功\n"
+                    ))
+            
+            # 所有循环完成
+            return {
+                'success': all(r.get('success') for r in all_loop_results),
+                'results': all_loop_results,
+                'loop_count': loop_count,
+                'total_videos': total_videos,
+                'total_processed': len(all_loop_results),
+                'success_count': sum(1 for r in all_loop_results if r.get('success')),
+                'message': f"循环处理完成: {loop_count} 轮 × {total_videos} 视频 = {len(all_loop_results)} 次处理，{sum(1 for r in all_loop_results if r.get('success'))} 次成功"
+            }
+        
+        ThreadExecutor.execute(run_loop_batch_pipeline, self._on_loop_complete)
+    
+    def _on_loop_complete(self, result: dict):
+        """循环处理完成"""
+        # 重置进度行标记
+        self.progress_line_start = None
+        
+        # 启用按钮
+        self.process_btn.config(state=tk.NORMAL)
+        self.loop_process_btn.config(state=tk.NORMAL)
+        
+        results = result.get('results', [])
+        loop_count = result.get('loop_count', 0)
+        total_videos = result.get('total_videos', 0)
+        total_processed = result.get('total_processed', 0)
+        success_count = result.get('success_count', 0)
+        failed_results = [r for r in results if not r.get('success')]
+        
+        self._log_result("\n" + "="*60 + "\n")
+        self._log_result("📊 循环处理汇总\n")
+        self._log_result("="*60 + "\n\n")
+        
+        # 统计信息
+        self._log_result(f"🔄 循环轮次: {loop_count}\n")
+        self._log_result(f"📹 视频数量: {total_videos}\n")
+        self._log_result(f"📝 总处理次数: {total_processed}\n")
+        self._log_result(f"✅ 成功次数: {success_count}\n")
+        self._log_result(f"❌ 失败次数: {len(failed_results)}\n")
+        self._log_result(f"📈 成功率: {success_count/total_processed*100:.1f}%\n\n")
+        
+        # 按轮次输出结果
+        for loop_idx in range(1, loop_count + 1):
+            loop_results = [r for r in results if r.get('loop_index') == loop_idx]
+            loop_success = sum(1 for r in loop_results if r.get('success'))
+            
+            self._log_result(f"🔁 第 {loop_idx} 轮: {loop_success}/{len(loop_results)} 成功\n")
+            
+            for r in loop_results:
+                video_name = r.get('video_name', '未知')
+                status_icon = "✅" if r.get('success') else "❌"
+                self._log_result(f"  {status_icon} {video_name}")
+                if not r.get('success'):
+                    error_msg = r.get('error', '未知错误')
+                    self._log_result(f" - {error_msg}")
+                self._log_result("\n")
+            self._log_result("\n")
+        
+        # 输出详细失败信息
+        if failed_results:
+            self._log_result(f"❌ 失败详情:\n")
+            self._log_result("-" * 50 + "\n")
+            for r in failed_results:
+                video_name = r.get('video_name', '未知')
+                loop_idx = r.get('loop_index', 0)
+                video_idx = r.get('video_index', 0)
+                error_msg = r.get('error', '未知错误')
+                self._log_result(f"  [轮次 {loop_idx}] [视频 {video_idx}] {video_name}\n")
+                self._log_result(f"      错误: {error_msg}\n\n")
+            self._log_result("-" * 50 + "\n\n")
+        
+        # 最终统计
+        self._log_result(f"🎉 循环处理完成!\n")
+        self._log_result(f"   {loop_count} 轮 × {total_videos} 视频 = {total_processed} 次处理\n")
+        self._log_result(f"   成功 {success_count} 次，失败 {len(failed_results)} 次\n")
+        self._log_result("="*60 + "\n")
+        
+        # 只有全部失败时才弹窗提示
+        if success_count == 0 and total_processed > 0:
+            show_error_message(
+                self.winfo_toplevel(), 
+                f"所有循环处理均失败，请查看日志了解详情"
+            )
