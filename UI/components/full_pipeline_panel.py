@@ -761,9 +761,6 @@ class FullPipelinePanel(ttk.Frame):
             for idx, video_path in enumerate(self.video_paths, 1):
                 video_name = Path(video_path).name
                 
-                # 更新视频预览为当前处理的视频
-                self.video_preview.after(0, lambda vp=video_path: self.video_preview.load_video(vp))
-                
                 # 更新主进度
                 self._log_batch_header(idx, total, video_name)
                 
@@ -1050,9 +1047,6 @@ class FullPipelinePanel(ttk.Frame):
                 # 处理当前轮次的所有视频
                 for video_idx, video_path in enumerate(self.video_paths, 1):
                     video_name = Path(video_path).name
-                    
-                    # 更新视频预览为当前处理的视频
-                    self.video_preview.after(0, lambda vp=video_path: self.video_preview.load_video(vp))
                     
                     # 更新主进度（考虑循环）
                     overall_idx = (loop_idx - 1) * total_videos + video_idx

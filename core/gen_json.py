@@ -395,14 +395,22 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
         if bgm_duration:
             bgm_mat_id = gen_id()
             
-            # 创建BGM素材
+            # 计算BGM在剪映中的实际播放时长（不超过视频总时长）
+            # total_duration 是视频的最终总时长，BGM应该匹配这个时长
+            bgm_play_duration = min(bgm_duration, total_duration)
+            
+            logger.info(f"   BGM文件时长: {bgm_duration/1000000:.2f}秒")
+            logger.info(f"   视频总时长: {total_duration/1000000:.2f}秒")
+            logger.info(f"   BGM播放时长: {bgm_play_duration/1000000:.2f}秒")
+            
+            # 创建BGM素材（使用文件原始时长）
             bgm_material = create_bgm_material(bgm_mat_id, bgm_path, bgm_duration)
             audio_materials.append(bgm_material)
             
-            # 创建BGM轨道和片段
-            bgm_track, bgm_segment = create_bgm_track(bgm_mat_id, bgm_duration)
+            # 创建BGM轨道和片段（使用裁剪后的时长）
+            bgm_track, bgm_segment = create_bgm_track(bgm_mat_id, bgm_play_duration)
             audio_tracks.append(bgm_track)
-            logger.info(f"✅ BGM轨道已添加")
+            logger.info(f"✅ BGM轨道已添加（已裁剪至视频长度）")
     
     # === 获取视频真实尺寸 ===
     canvas_width, canvas_height, aspect_ratio = get_video_dimensions(video_abs_path)
