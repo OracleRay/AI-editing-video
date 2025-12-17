@@ -25,7 +25,6 @@ from UI.utils.ui_helpers import (
     ThreadExecutor,
     show_error_message
 )
-from UI.utils.video_preview import VideoPreviewWidget
 
 
 class FullPipelinePanel(ttk.Frame):
@@ -48,6 +47,10 @@ class FullPipelinePanel(ttk.Frame):
         self.video_paths = []  # 存储多个视频路径（文件夹模式）
         self.progress_line_start = None  # 记录进度行的起始位置
         self.export_dir_var = tk.StringVar(value="")
+        self.clone_audio_path = None  # 克隆声音文件路径
+        self.bgm_path = None  # BGM单文件路径
+        self.bgm_folder_path = None  # BGM文件夹路径
+        self.bgm_mode = None  # BGM模式: 'file' 或 'folder'
         
         self.config(style='TFrame')
         self._create_widgets()
@@ -136,27 +139,110 @@ class FullPipelinePanel(ttk.Frame):
         button_frame = ttk.LabelFrame(left_frame, text=" 操作 ", padding=15)
         button_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # 选择按钮区域（两个按钮并排）
-        select_btn_frame = ttk.Frame(button_frame)
-        select_btn_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        # 选择视频文件按钮
+        # 选择视频按钮（支持文件和文件夹）
         select_btn = ttk.Button(
-            select_btn_frame,
-            text="🎬 选择文件",
-            command=self._select_video,
+            button_frame,
+            text="🎬 选择视频（文件/文件夹）",
+            command=self._select_video_or_folder,
             style='TButton'
         )
-        select_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        select_btn.pack(fill=tk.X, pady=(0, 10))
         
-        # 选择文件夹按钮
-        select_folder_btn = ttk.Button(
-            select_btn_frame,
-            text="📁 选择文件夹",
-            command=self._select_folder,
+        # 克隆声音选择区域
+        clone_audio_frame = ttk.Frame(button_frame)
+        clone_audio_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 克隆声音选择按钮
+        clone_audio_btn = ttk.Button(
+            clone_audio_frame,
+            text="🎤 选择克隆声音",
+            command=self._select_clone_audio,
             style='TButton'
         )
-        select_folder_btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        clone_audio_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # 倍速和音量选择框
+        params_frame = ttk.Frame(clone_audio_frame)
+        params_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 倍速选择
+        speed_frame = ttk.Frame(params_frame)
+        speed_frame.pack(side=tk.LEFT, padx=(0, 5))
+        
+        ttk.Label(
+            speed_frame,
+            text="倍速:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 3))
+        
+        self.speed_var = tk.DoubleVar(value=1.0)
+        self.speed_spinbox = ttk.Spinbox(
+            speed_frame,
+            from_=0.5,
+            to=2.0,
+            increment=0.1,
+            textvariable=self.speed_var,
+            width=6,
+            font=("微软雅黑", 9)
+        )
+        self.speed_spinbox.pack(side=tk.LEFT)
+        
+        # 音量选择
+        volume_frame = ttk.Frame(params_frame)
+        volume_frame.pack(side=tk.LEFT)
+        
+        ttk.Label(
+            volume_frame,
+            text="音量:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 3))
+        
+        self.volume_var = tk.DoubleVar(value=1.0)
+        self.volume_spinbox = ttk.Spinbox(
+            volume_frame,
+            from_=0.1,
+            to=2.0,
+            increment=0.1,
+            textvariable=self.volume_var,
+            width=6,
+            font=("微软雅黑", 9)
+        )
+        self.volume_spinbox.pack(side=tk.LEFT)
+        
+        # BGM选择区域
+        bgm_frame = ttk.Frame(button_frame)
+        bgm_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # BGM选择按钮
+        bgm_btn = ttk.Button(
+            bgm_frame,
+            text="🎵 选择bgm（可选）",
+            command=self._select_bgm_or_folder,
+            style='TButton'
+        )
+        bgm_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # BGM音量选择
+        bgm_volume_frame = ttk.Frame(bgm_frame)
+        bgm_volume_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        ttk.Label(
+            bgm_volume_frame,
+            text="bgm音量:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.bgm_volume_var = tk.DoubleVar(value=0.5)
+        self.bgm_volume_spinbox = ttk.Spinbox(
+            bgm_volume_frame,
+            from_=0.0,
+            to=2.0,
+            increment=0.1,
+            textvariable=self.bgm_volume_var,
+            width=6,
+            font=("微软雅黑", 9)
+        )
+        self.bgm_volume_spinbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # 开始处理按钮
         self.process_btn = ttk.Button(
@@ -234,82 +320,85 @@ class FullPipelinePanel(ttk.Frame):
         ttk.Label(
             commentary_frame,
             text="剧情梗概:",
-            font=("微软雅黑", 9)
+            font=("微软雅黑", 10)
         ).pack(anchor=tk.W, pady=(0, 5))
 
         self.plot_text = tk.Text(
             commentary_frame,
-            height=4,
+            height=20,
             wrap=tk.WORD,
+            font=("宋体", 11),
             bg=self.COLORS['text_bg'],
             fg=self.COLORS['fg'],
             insertbackground=self.COLORS['fg'],
-            relief=tk.FLAT
+            relief=tk.FLAT,
         )
-        self.plot_text.pack(fill=tk.X, pady=(0, 10))
+        self.plot_text.pack(fill=tk.X, pady=(0, 40))
         
-        # 流程说明
-        info_frame = ttk.LabelFrame(left_frame, text=" 流程说明 ", padding=10)
-        info_frame.pack(fill=tk.X, pady=(0, 0))
+        # 绑定文本变化事件
+        self.plot_text.bind('<<Modified>>', self._on_plot_text_modified)
         
-        steps = [
-            "视频转音频",
-            "音频转字幕",
-            "AI 智能剪辑",
-            "生成剪辑字幕",
-            "视频剪辑",
-            "刷新时间戳",
-            "AI 生成解说",
-            "解说转字幕",
-            "生成剪映草稿",
-            "复制到 JianyingPro Drafts"
-        ]
-        
-        for idx, step in enumerate(steps, start=1):
-            row = ttk.Frame(info_frame, style='Panel.TFrame')
-            row.pack(fill=tk.X, pady=3)
-            
-            number_label = tk.Label(
-                row,
-                text=f"{idx:02d}",
-                font=("微软雅黑", 9, "bold"),
-                width=3,
-                bg=self.COLORS['accent'],
-                fg="#FFFFFF",
-                padx=4,
-                pady=2
-            )
-            number_label.pack(side=tk.LEFT, padx=(0, 8))
-            
-            step_label = ttk.Label(
-                row,
-                text=step,
-                font=("微软雅黑", 9),
-                foreground=self.COLORS['text_gray']
-            )
-            step_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        # ========== 右侧：视频预览 + 处理日志 ==========
+        # ========== 右侧：任务清单 + 处理日志 ==========
         right_frame = ttk.Frame(content_frame)
         right_frame.grid(row=0, column=1, sticky='nsew', padx=(10, 0), pady=0)
         right_frame.grid_rowconfigure(1, weight=1)  # 日志区域可扩展
         right_frame.grid_columnconfigure(0, weight=1)
         
-        # 视频预览标签框
-        preview_label_frame = ttk.LabelFrame(right_frame, text=" 视频预览 ", padding=15)
-        preview_label_frame.grid(row=0, column=0, sticky='ew', padx=0, pady=(0, 10))
+        # 任务清单标签框
+        checklist_label_frame = ttk.LabelFrame(right_frame, text=" 任务清单 ", padding=15)
+        checklist_label_frame.grid(row=0, column=0, sticky='ew', padx=0, pady=(0, 10))
         
-        # 视频预览组件容器（用于居中）
-        preview_container = ttk.Frame(preview_label_frame)
-        preview_container.pack(pady=10)
+        # 创建任务清单项目
+        self.checklist_items = {}
         
-        # 视频预览组件
-        self.video_preview = VideoPreviewWidget(
-            preview_container,
-            width=280,
-            height=160
-        )
-        self.video_preview.pack()
+        # 定义任务项
+        tasks = [
+            ("video", "选择视频", True),  # (key, 标题, 是否必须)
+            ("audio", "选择克隆声音", True),
+            ("bgm", "选择bgm", False),
+            ("export", "选择剪映目录", True),
+            ("plot", "填写剧情", False)
+        ]
+        
+        for key, title, required in tasks:
+            task_frame = ttk.Frame(checklist_label_frame)
+            task_frame.pack(fill=tk.X, pady=5)
+            
+            # 状态图标
+            status_label = tk.Label(
+                task_frame,
+                text="×",
+                font=("微软雅黑", 14, "bold"),
+                fg="#999999" if not required else "#E74C3C",
+                bg=self.COLORS['panel_bg'],
+                width=2
+            )
+            status_label.pack(side=tk.LEFT, padx=(0, 8))
+            
+            # 任务名称
+            title_label = ttk.Label(
+                task_frame,
+                text=title,
+                font=("微软雅黑", 9, "bold"),
+                foreground=self.COLORS['fg']
+            )
+            title_label.pack(side=tk.LEFT, padx=(0, 10))
+            
+            # 文件名显示
+            filename_label = ttk.Label(
+                task_frame,
+                text="",
+                font=("微软雅黑", 8),
+                foreground=self.COLORS['text_gray']
+            )
+            filename_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            
+            # 保存引用
+            self.checklist_items[key] = {
+                'status': status_label,
+                'filename': filename_label,
+                'required': required
+            }
         
         # 结果显示标签框
         result_label_frame = ttk.LabelFrame(right_frame, text=" 处理日志 ", padding=15)
@@ -341,6 +430,68 @@ class FullPipelinePanel(ttk.Frame):
         # 初始提示
         self._log_result("💡 请选择要处理的视频文件...\n")
     
+    def _select_video_or_folder(self):
+        """选择视频文件或文件夹（弹出选择对话框）"""
+        from tkinter import messagebox
+        
+        # 创建一个顶层窗口用于选择
+        choice_window = tk.Toplevel(self.winfo_toplevel())
+        choice_window.title("选择方式")
+        choice_window.geometry("300x150")
+        choice_window.resizable(False, False)
+        
+        # 居中显示
+        choice_window.transient(self.winfo_toplevel())
+        choice_window.grab_set()
+        
+        # 设置窗口位置居中
+        choice_window.update_idletasks()
+        x = (choice_window.winfo_screenwidth() - choice_window.winfo_width()) // 2
+        y = (choice_window.winfo_screenheight() - choice_window.winfo_height()) // 2
+        choice_window.geometry(f"+{x}+{y}")
+        
+        # 提示文本
+        label = ttk.Label(
+            choice_window,
+            text="请选择您要处理的视频：",
+            font=("微软雅黑", 11),
+            justify=tk.CENTER
+        )
+        label.pack(pady=20)
+        
+        # 按钮容器
+        button_frame = ttk.Frame(choice_window)
+        button_frame.pack(pady=10)
+        
+        def select_file():
+            choice_window.destroy()
+            self._select_video()
+        
+        def select_folder():
+            choice_window.destroy()
+            self._select_folder()
+        
+        # 选择文件按钮
+        file_btn = ttk.Button(
+            button_frame,
+            text="🎬 选择单个文件",
+            command=select_file,
+            width=15
+        )
+        file_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 选择文件夹按钮
+        folder_btn = ttk.Button(
+            button_frame,
+            text="📁 选择文件夹",
+            command=select_folder,
+            width=15
+        )
+        folder_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 等待窗口关闭
+        choice_window.wait_window()
+    
     def _select_video(self):
         """选择单个视频文件"""
         file_path = filedialog.askopenfilename(
@@ -355,8 +506,9 @@ class FullPipelinePanel(ttk.Frame):
             self.video_path = file_path
             self.video_paths = [file_path]  # 单文件模式
             
-            # 加载视频预览
-            self.video_preview.load_video(file_path)
+            # 更新任务清单
+            filename = Path(file_path).name
+            self._update_checklist('video', filename)
             
             # 启用处理按钮
             self.process_btn.config(state=tk.NORMAL)
@@ -387,8 +539,9 @@ class FullPipelinePanel(ttk.Frame):
                 self.video_paths = [str(f) for f in video_files]
                 self.video_path = self.video_paths[0]  # 兼容单文件处理
                 
-                # 加载第一个视频的预览
-                self.video_preview.load_video(self.video_paths[0])
+                # 更新任务清单（显示文件夹名和文件数）
+                folder_name = Path(folder_path).name
+                self._update_checklist('video', f"{folder_name} ({len(video_files)} 个视频)")
                 
                 # 启用处理按钮
                 self.process_btn.config(state=tk.NORMAL)
@@ -403,6 +556,165 @@ class FullPipelinePanel(ttk.Frame):
                 self._log_result("\n")
             else:
                 self._log_result(f"\n⚠️ 文件夹中未找到视频文件: {folder_path}\n\n")
+    
+    def _select_clone_audio(self):
+        """选择克隆声音文件"""
+        file_path = filedialog.askopenfilename(
+            title="选择克隆声音文件",
+            filetypes=[
+                ("音频文件", "*.mp3 *.wav *.m4a *.flac *.aac"),
+                ("所有文件", "*.*")
+            ]
+        )
+        
+        if file_path:
+            self.clone_audio_path = file_path
+            # 显示文件名
+            filename = Path(file_path).name
+            # 更新任务清单
+            self._update_checklist('audio', filename)
+            self._log_result(f"\n✅ 已选择克隆声音: {filename}\n")
+            self._log_result(f"   路径: {file_path}\n\n")
+    
+    def _select_bgm_or_folder(self):
+        """选择BGM文件或文件夹（弹出选择对话框）"""
+        # 创建一个顶层窗口用于选择
+        choice_window = tk.Toplevel(self.winfo_toplevel())
+        choice_window.title("选择BGM")
+        choice_window.geometry("300x150")
+        choice_window.resizable(False, False)
+        
+        # 居中显示
+        choice_window.transient(self.winfo_toplevel())
+        choice_window.grab_set()
+        
+        # 设置窗口位置居中
+        choice_window.update_idletasks()
+        x = (choice_window.winfo_screenwidth() - choice_window.winfo_width()) // 2
+        y = (choice_window.winfo_screenheight() - choice_window.winfo_height()) // 2
+        choice_window.geometry(f"+{x}+{y}")
+        
+        # 提示文本
+        label = ttk.Label(
+            choice_window,
+            text="请选择BGM来源：",
+            font=("微软雅黑", 11),
+            justify=tk.CENTER
+        )
+        label.pack(pady=20)
+        
+        # 按钮容器
+        button_frame = ttk.Frame(choice_window)
+        button_frame.pack(pady=10)
+        
+        def select_file():
+            choice_window.destroy()
+            self._select_bgm_file()
+        
+        def select_folder():
+            choice_window.destroy()
+            self._select_bgm_folder()
+        
+        # 选择文件按钮
+        file_btn = ttk.Button(
+            button_frame,
+            text="🎵 选择单个文件",
+            command=select_file,
+            width=15
+        )
+        file_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 选择文件夹按钮
+        folder_btn = ttk.Button(
+            button_frame,
+            text="📁 选择文件夹",
+            command=select_folder,
+            width=15
+        )
+        folder_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 等待窗口关闭
+        choice_window.wait_window()
+    
+    def _select_bgm_file(self):
+        """选择单个BGM文件"""
+        file_path = filedialog.askopenfilename(
+            title="选择bgm音频文件",
+            filetypes=[
+                ("音频文件", "*.mp3 *.wav *.m4a *.flac *.aac"),
+                ("所有文件", "*.*")
+            ]
+        )
+        
+        if file_path:
+            self.bgm_path = file_path
+            self.bgm_folder_path = None
+            self.bgm_mode = 'file'
+            # 显示文件名
+            filename = Path(file_path).name
+            # 更新任务清单
+            self._update_checklist('bgm', filename)
+            self._log_result(f"\n✅ 已选择bgm文件: {filename}\n")
+            self._log_result(f"   路径: {file_path}\n\n")
+    
+    def _select_bgm_folder(self):
+        """选择BGM文件夹（处理时随机选择）"""
+        folder_path = filedialog.askdirectory(title="选择bgm文件夹")
+        
+        if folder_path:
+            folder = Path(folder_path)
+            # 查找所有音频文件
+            audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
+            audio_files = []
+            for ext in audio_extensions:
+                audio_files.extend(folder.glob(f'*{ext}'))
+                audio_files.extend(folder.glob(f'*{ext.upper()}'))
+            
+            # 去重
+            audio_files = list(set(audio_files))
+            
+            if audio_files:
+                self.bgm_path = None
+                self.bgm_folder_path = folder_path
+                self.bgm_mode = 'folder'
+                # 更新任务清单
+                folder_name = Path(folder_path).name
+                self._update_checklist('bgm', f"{folder_name} ({len(audio_files)} 个音频，随机)")
+                self._log_result(f"\n✅ 已选择bgm文件夹（随机模式）\n")
+                self._log_result(f"   路径: {folder_path}\n")
+                self._log_result(f"   共找到 {len(audio_files)} 个音频文件\n\n")
+            else:
+                self._log_result(f"\n⚠️ 文件夹中未找到音频文件: {folder_path}\n\n")
+    
+    def _get_current_bgm(self) -> str:
+        """
+        获取当前应该使用的BGM路径
+        - 单文件模式：返回固定的文件路径
+        - 文件夹模式：从文件夹中随机选择一个音频文件
+        
+        Returns:
+            BGM文件路径，如果未选择则返回None
+        """
+        import random
+        
+        if self.bgm_mode == 'file' and self.bgm_path:
+            return self.bgm_path
+        elif self.bgm_mode == 'folder' and self.bgm_folder_path:
+            folder = Path(self.bgm_folder_path)
+            audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
+            audio_files = []
+            for ext in audio_extensions:
+                audio_files.extend(folder.glob(f'*{ext}'))
+                audio_files.extend(folder.glob(f'*{ext.upper()}'))
+            
+            audio_files = list(set(audio_files))
+            
+            if audio_files:
+                selected = random.choice(audio_files)
+                self._log_result(f"   🎲 随机选择BGM: {selected.name}\n")
+                return str(selected)
+        
+        return None
     
     def _get_file_size(self, file_path: str) -> str:
         """获取文件大小"""
@@ -426,6 +738,9 @@ class FullPipelinePanel(ttk.Frame):
             return
         if not self.export_dir_var.get().strip():
             show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            return
+        if not self.clone_audio_path:
+            show_error_message(self.winfo_toplevel(), "请先选择克隆声音文件")
             return
         
         # 重置进度行标记
@@ -462,11 +777,19 @@ class FullPipelinePanel(ttk.Frame):
                 
                 # 使用 try-except 包装，确保单个视频失败不会中断整体流程
                 try:
+                    # 获取当前BGM（文件夹模式会随机选择）
+                    current_bgm = self._get_current_bgm()
+                    
                     result = self.pipeline_service.run_full_pipeline(
                         video_path,
                         progress_callback=make_callback(idx),
                         plot_params=plot_params,
-                        export_target_dir=self.export_dir_var.get().strip()
+                        export_target_dir=self.export_dir_var.get().strip(),
+                        reference_audio=self.clone_audio_path,
+                        tts_speed=self.speed_var.get(),
+                        tts_volume=self.volume_var.get(),
+                        bgm_path=current_bgm,
+                        bgm_volume=self.bgm_volume_var.get() if current_bgm else None
                     )
                 except Exception as e:
                     # 捕获未预期的异常，记录错误并继续
@@ -612,6 +935,47 @@ class FullPipelinePanel(ttk.Frame):
                 f"所有视频处理失败，请查看日志了解详情"
             )
     
+    def _on_plot_text_modified(self, event):
+        """剧情文本修改事件处理"""
+        # 重置修改标志（避免重复触发）
+        self.plot_text.edit_modified(False)
+        
+        # 获取文本内容
+        plot_content = self.plot_text.get("1.0", tk.END).strip()
+        
+        # 更新任务清单
+        if plot_content:
+            # 显示前30个字符作为预览
+            preview = plot_content[:30] + "..." if len(plot_content) > 30 else plot_content
+            self._update_checklist('plot', preview)
+        else:
+            self._update_checklist('plot', None)
+    
+    def _update_checklist(self, key: str, filename: str = None):
+        """
+        更新任务清单状态
+        
+        Args:
+            key: 任务键名 ('video', 'audio', 'bgm', 'export', 'plot')
+            filename: 文件名（如果为None则表示未选择）
+        """
+        if key not in self.checklist_items:
+            return
+        
+        item = self.checklist_items[key]
+        
+        if filename:
+            # 已选择 - 显示绿色√
+            item['status'].config(text="✓", fg="#27AE60")
+            item['filename'].config(text=filename)
+        else:
+            # 未选择 - 根据是否必须显示红色或灰色×
+            item['status'].config(
+                text="×",
+                fg="#E74C3C" if item['required'] else "#999999"
+            )
+            item['filename'].config(text="")
+    
     def _log_result(self, message: str):
         """记录结果到文本框"""
         self.result_text.insert(tk.END, message)
@@ -634,6 +998,9 @@ class FullPipelinePanel(ttk.Frame):
         if selected:
             self.export_dir_var.set(selected)
             self.export_dir_display.config(text=selected)
+            # 更新任务清单
+            folder_name = Path(selected).name
+            self._update_checklist('export', folder_name)
             self._log_result(f"🗂️ 导出目录已设置为: {selected}\n")
     
     def _start_loop_processing(self):
@@ -643,6 +1010,9 @@ class FullPipelinePanel(ttk.Frame):
             return
         if not self.export_dir_var.get().strip():
             show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            return
+        if not self.clone_audio_path:
+            show_error_message(self.winfo_toplevel(), "请先选择克隆声音文件")
             return
         
         # 获取循环次数
@@ -708,11 +1078,19 @@ class FullPipelinePanel(ttk.Frame):
                     
                     # 使用 try-except 包装，确保单个视频失败不会中断整体流程
                     try:
+                        # 获取当前BGM（文件夹模式会随机选择）
+                        current_bgm = self._get_current_bgm()
+                        
                         result = self.pipeline_service.run_full_pipeline(
                             video_path,
                             progress_callback=make_loop_callback(overall_idx, overall_total),
                             plot_params=plot_params,
-                            export_target_dir=self.export_dir_var.get().strip()
+                            export_target_dir=self.export_dir_var.get().strip(),
+                            reference_audio=self.clone_audio_path,
+                            tts_speed=self.speed_var.get(),
+                            tts_volume=self.volume_var.get(),
+                            bgm_path=current_bgm,
+                            bgm_volume=self.bgm_volume_var.get() if current_bgm else None
                         )
                     except Exception as e:
                         # 捕获未预期的异常，记录错误并继续
