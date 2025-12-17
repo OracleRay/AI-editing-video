@@ -158,6 +158,35 @@ def gen_id():
     return uuid.uuid4().hex
 
 
+def get_video_duration(video_file):
+    """
+    获取视频时长（秒）
+    
+    Args:
+        video_file: 视频文件路径
+    
+    Returns:
+        视频时长（秒），失败返回None
+    """
+    try:
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        result = subprocess.run(
+            [FFPROBE_PATH, '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', video_file],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='ignore',
+            creationflags=creation_flags
+        )
+        duration_seconds = float(result.stdout.strip())
+        return duration_seconds
+    except Exception as e:
+        logger.error(f"获取视频时长失败: {e}")
+        return None
+
+
 # === 主程序 ===
 def edit_video(srt_file, video_file):
     """
@@ -214,9 +243,9 @@ def edit_video(srt_file, video_file):
 if __name__ == "__main__":
 
     # 测试用的默认SRT文件路径
-    srt_file_path = "C:/Users/leidc/Desktop/workspace/srt_files/clip/20251201_160002.txt"
+    srt_file_path = "C:/Users/leidc/Desktop/test/clip.txt"
 
-    video_src_path = "C:/Users/leidc/Desktop/123/成家立业06.mp4"
+    video_src_path = "C:/Users/leidc/Desktop/待处理视频/捕风追影1.mp4"
     
     result = edit_video(srt_file_path, video_src_path)
     if result:

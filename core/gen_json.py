@@ -45,7 +45,7 @@ TRANSITION_CONFIGS = [
 ]
 
 
-def generate_audio_from_srt(srt_file, reference_audio, output_dir, model, speed):
+def generate_audio_from_srt(srt_file, reference_audio, output_dir, model, speed, volume=None):
     """根据SRT文件生成音频文件"""
     
     # 使用 config_loader 转换为绝对路径
@@ -69,7 +69,7 @@ def generate_audio_from_srt(srt_file, reference_audio, output_dir, model, speed)
     failed_count = 0
     for file_index, subtitle in enumerate(subtitles, start=1):
         try:
-            process_subtitle(subtitle, model, reference_audio_path, out_dir, speed, file_index)
+            process_subtitle(subtitle, model, reference_audio_path, out_dir, speed, file_index, volume=volume)
             success_count += 1
         except Exception as e:
             failed_count += 1
@@ -194,7 +194,7 @@ def get_aspect_ratio_name(ratio):
 
 # === 生成项目文件 ===
 def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
-                            ocr_confidence=0.4, audio_dir=None, subtitle_dir=None):
+                            ocr_confidence=0.4, audio_dir=None, subtitle_dir=None, bgm_path=None):
     """
     生成剪映项目文件
     
@@ -385,6 +385,24 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
         "type": "audio"
     }
     audio_tracks.append(audio_track)
+    
+    # === 添加BGM轨道（如果提供）===
+    if bgm_path and os.path.exists(bgm_path):
+        logger.info(f"🎵 添加BGM轨道: {bgm_path}")
+        
+        # 获取BGM文件的时长
+        bgm_duration = get_audio_duration(bgm_path)
+        if bgm_duration:
+            bgm_mat_id = gen_id()
+            
+            # 创建BGM素材
+            bgm_material = create_bgm_material(bgm_mat_id, bgm_path, bgm_duration)
+            audio_materials.append(bgm_material)
+            
+            # 创建BGM轨道和片段
+            bgm_track, bgm_segment = create_bgm_track(bgm_mat_id, bgm_duration)
+            audio_tracks.append(bgm_track)
+            logger.info(f"✅ BGM轨道已添加")
     
     # === 获取视频真实尺寸 ===
     canvas_width, canvas_height, aspect_ratio = get_video_dimensions(video_abs_path)
@@ -634,12 +652,12 @@ if __name__ == "__main__":
 
     # 生成剪映项目文件（自动转换音频为字幕）
     generate_capcut_project(
-        video_file="C:/Users/leidc/Desktop/workspace/videos/20251201_131444.mp4",
-        audio_pattern=str("C:/Users/leidc/Desktop/workspace/audios/20251201_132114/" + Path(config.get('audio.pattern')).name),
-        srt_file="C:/Users/leidc/Desktop/workspace/srt_files/jieShuo/20251201_132114.txt",
-        output_dir="C:/Users/leidc/Desktop/workspace/json/test/",
-        audio_dir="C:/Users/leidc/Desktop/workspace/audios/20251201_132114/",  # 音频目录
-        subtitle_dir="C:/Users/leidc/Desktop/workspace/srt_files/subtitles"  # 字幕基础目录
+        video_file="C:/Users/leidc/Desktop/workspace/videos/20251216_173912.mp4",
+        audio_pattern=str("C:/Users/leidc/Desktop/test/audios/" + Path(config.get('audio.pattern')).name),
+        srt_file="C:/Users/leidc/Desktop/test/jieshuo_test.txt",
+        output_dir="C:/Users/leidc/Desktop/test/json",
+        audio_dir="C:/Users/leidc/Desktop/test/audios",  # 音频目录
+        subtitle_dir="C:/Users/leidc/Desktop/test/subtitles"  # 字幕基础目录
     )
     
     logger.info(f"✅ 剪映项目生成完成!")

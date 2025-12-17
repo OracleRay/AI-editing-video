@@ -581,3 +581,87 @@ def generate_meta_info(project_id, total_duration):
     
     return meta_info
 
+
+def create_bgm_material(bgm_mat_id, bgm_path, bgm_duration):
+    """
+    创建BGM音频素材
+    
+    Args:
+        bgm_mat_id: BGM素材ID
+        bgm_path: BGM文件路径
+        bgm_duration: BGM时长（微秒）
+    
+    Returns:
+        BGM素材字典
+    """
+    import os
+    
+    return {
+        "app_id": 0,
+        "category_id": "",
+        "category_name": "local",
+        "check_flag": 1,
+        "duration": bgm_duration,
+        "effect_id": "",
+        "formula_id": "",
+        "id": bgm_mat_id,
+        "intensifies_path": "",
+        "local_material_id": "",
+        "material_id": bgm_mat_id,
+        "material_name": os.path.basename(bgm_path),
+        "material_url": "",
+        "name": os.path.basename(bgm_path),
+        "path": bgm_path,
+        "query": "",
+        "request_id": "",
+        "resource_id": "",
+        "source_platform": 0,
+        "team_id": "",
+        "text_id": "",
+        "type": "music",
+        "video_id": "",
+        "wave_points": []
+    }
+
+
+def create_bgm_track(bgm_mat_id, bgm_duration):
+    """
+    创建BGM音频轨道（包含BGM片段）
+    
+    Args:
+        bgm_mat_id: BGM素材ID
+        bgm_duration: BGM时长（微秒）
+    
+    Returns:
+        包含 (bgm_track, bgm_segment) 的元组
+    """
+    import uuid
+    
+    def gen_id():
+        return uuid.uuid4().hex
+    
+    # 创建BGM片段
+    bgm_segment = create_base_segment()
+    bgm_segment.update({
+        "id": gen_id(),
+        "material_id": bgm_mat_id,
+        "target_timerange": {"start": 0, "duration": bgm_duration},
+        "source_timerange": {"start": 0, "duration": bgm_duration},
+        "volume": 1.0,  # 音量已在前面处理过
+        "extra_material_refs": [],
+        "track_render_index": 0
+    })
+    
+    # 创建BGM轨道
+    bgm_track = {
+        "attribute": 0,
+        "flag": 0,
+        "id": gen_id(),
+        "is_default_name": True,
+        "name": "BGM",
+        "segments": [bgm_segment],
+        "type": "audio"
+    }
+    
+    return bgm_track, bgm_segment
+

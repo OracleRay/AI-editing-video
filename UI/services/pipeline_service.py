@@ -134,7 +134,12 @@ class PipelineService:
         video_path: str, 
         progress_callback: Optional[Callable[[str, int], None]] = None,
         plot_params: Optional[str] = None,
-        export_target_dir: Optional[str] = None
+        export_target_dir: Optional[str] = None,
+        reference_audio: Optional[str] = None,
+        tts_speed: Optional[float] = None,
+        tts_volume: Optional[float] = None,
+        bgm_path: Optional[str] = None,
+        bgm_volume: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         功能 2：执行完整流程（步骤 1-10）
@@ -194,7 +199,12 @@ class PipelineService:
                 progress_callback("正在生成剪映项目...", 90)
             project_json_dir = step9_generate_capcut_project(
                 self.step_data["edited_video"],
-                self.step_data["commentary_srt_file"]
+                self.step_data["commentary_srt_file"],
+                reference_audio=reference_audio,
+                tts_speed=tts_speed,
+                tts_volume=tts_volume,
+                bgm_path=bgm_path,
+                bgm_volume=bgm_volume
             )
             self.step_data["project_json_dir"] = project_json_dir
             self.step_data["export_destination_dir"] = export_target_dir or self.step_data.get("export_destination_dir")
@@ -238,7 +248,12 @@ class PipelineService:
         count: int = 3,
         progress_callback: Optional[Callable[[str, int], None]] = None,
         commentary_params: Optional[Dict[str, str]] = None,
-        export_target_dir: Optional[str] = None
+        export_target_dir: Optional[str] = None,
+        reference_audio: Optional[str] = None,
+        tts_speed: Optional[float] = None,
+        tts_volume: Optional[float] = None,
+        bgm_path: Optional[str] = None,
+        bgm_volume: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         功能 3：从步骤 7 开始，生成多次 AI 解说（循环执行）
@@ -273,7 +288,15 @@ class PipelineService:
                 commentary_srt_file = step8_commentary_text_to_srt(commentary_text)
                 
                 # 步骤 9：生成剪映项目
-                project_json_dir = step9_generate_capcut_project(edited_video, commentary_srt_file)
+                project_json_dir = step9_generate_capcut_project(
+                    edited_video, 
+                    commentary_srt_file,
+                    reference_audio=reference_audio,
+                    tts_speed=tts_speed,
+                    tts_volume=tts_volume,
+                    bgm_path=bgm_path,
+                    bgm_volume=bgm_volume
+                )
                 
                 # 步骤 10：复制到指定目录
                 desktop_project_path = step10_copy_project_to_destination(

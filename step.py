@@ -286,13 +286,26 @@ def step8_commentary_text_to_srt(commentary_text: str) -> str:
 
 
 # ========== 步骤 9：生成剪映项目 ==========
-def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -> str:
+def step9_generate_capcut_project(
+    edited_video: str, 
+    commentary_srt_file: str,
+    reference_audio: Optional[str] = None,
+    tts_speed: Optional[float] = None,
+    tts_volume: Optional[float] = None,
+    bgm_path: Optional[str] = None,
+    bgm_volume: Optional[float] = None
+) -> str:
     """
     步骤 9：生成剪映项目 JSON 文件
     
     Args:
         edited_video: 剪辑后的视频路径
         commentary_srt_file: 解说 SRT 文件路径
+        reference_audio: 克隆声音文件路径（可选，如果不提供则从配置读取）
+        tts_speed: TTS倍速（可选，如果不提供则从配置读取）
+        tts_volume: TTS音量（可选，如果不提供则从配置读取）
+        bgm_path: BGM文件路径（可选）
+        bgm_volume: BGM音量（可选，默认0.5）
     """
     logger.info("=" * 80)
     logger.info("【步骤 9/10】生成剪映项目 JSON 文件...")
@@ -302,9 +315,15 @@ def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -
     audio_pattern = config.get('audio.pattern')
     audio_output_dir = config.get('audio.output_dir')
     output_json_dir = config.get('output.json_dir')
-    reference_audio = config.get('tts.reference_audio')
     tts_model = config.get('tts.model')
-    tts_speed = config.get('tts.speed')
+    
+    # 如果没有传入参数，从配置文件读取（兼容旧代码）
+    if reference_audio is None:
+        reference_audio = config.get('tts.reference_audio')
+    if tts_speed is None:
+        tts_speed = config.get('tts.speed')
+    if tts_volume is None:
+        tts_volume = config.get('tts.volume')
 
     # 为音频和 JSON 生成统一的时间戳目录
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -324,9 +343,41 @@ def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -
         reference_audio=reference_audio,
         output_dir=audio_run_dir_str,
         model=tts_model,
-        speed=tts_speed
+        speed=tts_speed,
+        volume=tts_volume
     )
     logger.info(f"✅ 音频生成完成: {audio_abs_dir}")
+    
+    # 处理BGM（如果提供）
+    processed_bgm_path = None
+    if bgm_path and bgm_volume is not None:
+        from utils.audio_processor import adjust_bgm_for_video
+        from core.video_editing import get_video_duration
+        
+        logger.info("🎵 开始处理BGM...")
+        
+        # 转换BGM路径为绝对路径（如果是相对路径）
+        bgm_abs_path = config.get_absolute_path(bgm_path) if not Path(bgm_path).is_absolute() else bgm_path
+        
+        # 获取视频时长
+        video_abs_path = config.get_absolute_path(edited_video) if not Path(edited_video).is_absolute() else edited_video
+        video_duration = get_video_duration(video_abs_path)
+        
+        if video_duration is None:
+            logger.error("无法获取视频时长，跳过BGM处理")
+        else:
+            # 处理BGM（调整音量和时长）
+            bgm_output_dir = get_workspace_path("bgm") / timestamp
+            bgm_output_dir.mkdir(parents=True, exist_ok=True)
+            processed_bgm_path = str(bgm_output_dir / f"bgm_processed{Path(bgm_path).suffix}")
+            
+            adjust_bgm_for_video(
+                bgm_path=bgm_abs_path,
+                output_path=processed_bgm_path,
+                target_duration=video_duration,
+                volume=bgm_volume
+            )
+            logger.info(f"✅ BGM处理完成: {processed_bgm_path}")
     
     # 生成剪映项目文件
     generate_capcut_project(
@@ -336,7 +387,8 @@ def step9_generate_capcut_project(edited_video: str, commentary_srt_file: str) -
         output_dir=json_run_dir,
         ocr_confidence=0.4,
         audio_dir=audio_abs_dir,  # 自动为音频生成字幕并添加到项目中
-        subtitle_dir=str(get_workspace_path("srt_files/subtitles"))
+        subtitle_dir=str(get_workspace_path("srt_files/subtitles")),
+        bgm_path=processed_bgm_path  # 传递处理后的BGM
     )
     logger.info(f"✅ 剪映项目生成完成: {json_run_dir}")
     
