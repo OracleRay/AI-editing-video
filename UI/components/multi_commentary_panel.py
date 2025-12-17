@@ -52,6 +52,8 @@ class MultiCommentaryPanel(ttk.Frame):
         self.edited_video = None
         self.progress_line_start = None  # 记录进度行的起始位置
         self.export_dir_var = tk.StringVar(value="")
+        self.clone_audio_path = None  # 克隆声音文件路径
+        self.bgm_path = None  # BGM文件路径
         
         self.config(style='TFrame')
         self._create_widgets()
@@ -232,6 +234,124 @@ class MultiCommentaryPanel(ttk.Frame):
             font=("微软雅黑", 8),
             foreground=self.COLORS['text_gray']
         ).pack(side=tk.LEFT, padx=5)
+        
+        # 克隆声音选择
+        clone_audio_frame = ttk.Frame(param_frame)
+        clone_audio_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        ttk.Button(
+            clone_audio_frame,
+            text="🎤 选择克隆声音",
+            command=self._select_clone_audio,
+            style='TButton'
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # 倍速和音量选择
+        params_frame = ttk.Frame(clone_audio_frame)
+        params_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 倍速选择
+        speed_frame = ttk.Frame(params_frame)
+        speed_frame.pack(side=tk.LEFT, padx=(0, 5))
+        
+        ttk.Label(
+            speed_frame,
+            text="倍速:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 3))
+        
+        self.speed_var = tk.DoubleVar(value=1.0)
+        self.speed_spinbox = ttk.Spinbox(
+            speed_frame,
+            from_=0.5,
+            to=2.0,
+            increment=0.1,
+            textvariable=self.speed_var,
+            width=6,
+            font=("微软雅黑", 9)
+        )
+        self.speed_spinbox.pack(side=tk.LEFT)
+        
+        # 音量选择
+        volume_frame = ttk.Frame(params_frame)
+        volume_frame.pack(side=tk.LEFT)
+        
+        ttk.Label(
+            volume_frame,
+            text="音量:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 3))
+        
+        self.volume_var = tk.DoubleVar(value=1.0)
+        self.volume_spinbox = ttk.Spinbox(
+            volume_frame,
+            from_=0.1,
+            to=2.0,
+            increment=0.1,
+            textvariable=self.volume_var,
+            width=6,
+            font=("微软雅黑", 9)
+        )
+        self.volume_spinbox.pack(side=tk.LEFT)
+        
+        # 克隆声音路径显示
+        self.clone_audio_display = tk.Label(
+            param_frame,
+            text="未选择克隆声音",
+            font=("微软雅黑", 8),
+            bg=self.COLORS['text_bg'],
+            fg=self.COLORS['text_gray'],
+            anchor=tk.W,
+            padx=8,
+            pady=4
+        )
+        self.clone_audio_display.pack(fill=tk.X, pady=(5, 0))
+        
+        # BGM选择
+        bgm_frame = ttk.Frame(param_frame)
+        bgm_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        ttk.Button(
+            bgm_frame,
+            text="🎵 选择BGM",
+            command=self._select_bgm,
+            style='TButton'
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # BGM音量选择
+        bgm_volume_frame = ttk.Frame(bgm_frame)
+        bgm_volume_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        ttk.Label(
+            bgm_volume_frame,
+            text="BGM音量:",
+            font=("微软雅黑", 9)
+        ).pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.bgm_volume_var = tk.DoubleVar(value=0.5)
+        self.bgm_volume_spinbox = ttk.Spinbox(
+            bgm_volume_frame,
+            from_=0.0,
+            to=2.0,
+            increment=0.1,
+            textvariable=self.bgm_volume_var,
+            width=6,
+            font=("微软雅黑", 9)
+        )
+        self.bgm_volume_spinbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # BGM路径显示
+        self.bgm_display = tk.Label(
+            param_frame,
+            text="未选择BGM（可选）",
+            font=("微软雅黑", 8),
+            bg=self.COLORS['text_bg'],
+            fg=self.COLORS['text_gray'],
+            anchor=tk.W,
+            padx=8,
+            pady=4
+        )
+        self.bgm_display.pack(fill=tk.X, pady=(5, 0))
 
         # 导出目录
         export_frame = ttk.LabelFrame(left_frame, text=" 剪映导出目录 ", padding=15)
@@ -382,6 +502,46 @@ class MultiCommentaryPanel(ttk.Frame):
             self._check_ready()
             self._log_result(f"✅ 已选择视频文件: {Path(file_path).name}\n")
     
+    def _select_clone_audio(self):
+        """选择克隆声音文件"""
+        file_path = filedialog.askopenfilename(
+            title="选择克隆声音文件",
+            filetypes=[
+                ("音频文件", "*.mp3 *.wav *.m4a *.flac *.aac"),
+                ("所有文件", "*.*")
+            ]
+        )
+        
+        if file_path:
+            self.clone_audio_path = file_path
+            # 显示文件名
+            filename = Path(file_path).name
+            self.clone_audio_display.config(
+                text=f"✅ {filename}",
+                fg=self.COLORS['fg']
+            )
+            self._log_result(f"✅ 已选择克隆声音: {filename}\n")
+    
+    def _select_bgm(self):
+        """选择BGM文件"""
+        file_path = filedialog.askopenfilename(
+            title="选择BGM音频文件",
+            filetypes=[
+                ("音频文件", "*.mp3 *.wav *.m4a *.flac *.aac"),
+                ("所有文件", "*.*")
+            ]
+        )
+        
+        if file_path:
+            self.bgm_path = file_path
+            # 显示文件名
+            filename = Path(file_path).name
+            self.bgm_display.config(
+                text=f"✅ {filename}",
+                fg=self.COLORS['fg']
+            )
+            self._log_result(f"✅ 已选择BGM: {filename}\n")
+    
     def _check_ready(self):
         """检查是否可以开始处理"""
         if self.clip_srt_file and self.edited_video:
@@ -396,6 +556,9 @@ class MultiCommentaryPanel(ttk.Frame):
             return
         if not self.export_dir_var.get().strip():
             show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            return
+        if not self.clone_audio_path:
+            show_error_message(self.winfo_toplevel(), "请先选择克隆声音文件")
             return
         
         try:
@@ -426,7 +589,12 @@ class MultiCommentaryPanel(ttk.Frame):
                 count,
                 progress_callback=self._update_progress,
                 commentary_params=commentary_params,
-                export_target_dir=self.export_dir_var.get().strip()
+                export_target_dir=self.export_dir_var.get().strip(),
+                reference_audio=self.clone_audio_path,
+                tts_speed=self.speed_var.get(),
+                tts_volume=self.volume_var.get(),
+                bgm_path=self.bgm_path,
+                bgm_volume=self.bgm_volume_var.get() if self.bgm_path else None
             )
         
         ThreadExecutor.execute(run_pipeline, self._on_complete)
