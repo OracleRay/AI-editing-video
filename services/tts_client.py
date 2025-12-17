@@ -24,12 +24,6 @@ STATUS_URL_TMPL = f"{API_BASE}{config.get('tts.api.status_endpoint')}"
 API_KEY = config.get('tts.api.api_key')
 DEFAULT_MODEL = config.get('tts.model')
 
-# 用户配置
-SRT_FILE = config.get('subtitle.srt_file')
-REFERENCE_AUDIO = config.get('tts.reference_audio')
-SPEED = config.get('tts.speed')
-FFMPEG_PATH = config.get('ffmpeg.ffmpeg_path')
-
 # 轮询配置
 POLL_INTERVAL_SEC = config.get('tts.polling.interval_sec', 2.0)
 POLL_TIMEOUT_SEC = config.get('tts.polling.timeout_sec', 300)
@@ -67,13 +61,25 @@ def parse_srt(srt_file_path: str) -> list[dict]:
     return subtitles
 
 
-def submit_tts(text: str, model: str, reference_file_path: str | None = None) -> str:
+def submit_tts(text: str, model: str, reference_file_path: str | None = None, speed: float = None, volume: float = None) -> str:
     """提交TTS任务，返回task_id"""
     headers = {"X-API-KEY": API_KEY}
-    files: dict[str, tuple | None] = {
-        "text": (None, text),
-        "model": (None, model),
+    
+    # 如果没有传入参数，从配置文件读取
+    if speed is None:
+        speed = config.get('tts.speed')
+    if volume is None:
+        volume = config.get('tts.volume')
+
+    payload = {
+        "text": text,
+        "speed": speed,
+        "volume": volume,
+        "subtitle": "true",
+        "model": model
     }
+
+    files: dict[str, tuple | None] = {}
     
     file_handle = None
     try:
@@ -82,7 +88,7 @@ def submit_tts(text: str, model: str, reference_file_path: str | None = None) ->
             file_handle = open(reference_file_path, "rb")
             files["files"] = (os.path.basename(reference_file_path), file_handle, mime_type)
         
-        resp = requests.post(SUBMIT_URL, headers=headers, files=files)
+        resp = requests.post(SUBMIT_URL, headers=headers, data=payload, files=files)
     finally:
         if file_handle:
             file_handle.close()
@@ -155,72 +161,6 @@ def save_audio_from_base64(b64_str: str, out_dir: str, subtitle_index: int, fmt:
     return out_path
 
 
-def _build_atempo_chain(speed: float) -> str:
-    """将任意倍速拆分为ffmpeg atempo允许的0.5~2.0段"""
-    if speed <= 0:
-        raise ValueError("倍速需为正数")
-    
-    filters = []
-    remaining = speed
-    
-    while remaining > 2.0:
-        filters.append("atempo=2.0")
-        remaining /= 2.0
-    
-    while 0 < remaining < 0.5:
-        filters.append("atempo=0.5")
-        remaining /= 0.5
-    
-    if abs(remaining - 1.0) > 1e-6:
-        filters.append(f"atempo={remaining:.6f}")
-    
-    return ",".join(filters) or "atempo=1.0"
-
-
-def apply_speed_with_ffmpeg(input_path: str, speed: float) -> str:
-    """使用ffmpeg对音频进行倍速处理并覆盖原文件"""
-    if abs(speed - 1.0) <= 1e-6:
-        return input_path
-
-    base_dir = os.path.dirname(input_path)
-    base_name, ext = os.path.splitext(os.path.basename(input_path))
-    temp_out_path = os.path.join(base_dir, f"{base_name}.__tmp_speed{ext}")
-
-    filter_chain = _build_atempo_chain(speed)
-    cmd = [
-        FFMPEG_PATH,
-        "-v", "error",
-        "-y",
-        "-i", input_path,
-        "-filter:a", filter_chain,
-        "-vn",
-        temp_out_path,
-    ]
-    try:
-        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        proc = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            creationflags=creation_flags,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-        )
-    except FileNotFoundError:
-        return input_path
-
-    if proc.returncode != 0:
-        return input_path
-
-    try:
-        os.replace(temp_out_path, input_path)
-    except Exception as e:
-        return input_path
-
-    return input_path
-
-
 def extract_and_save_audio(result_json: dict, out_dir: str, subtitle_index: int) -> str:
     """从API返回结果中提取并保存音频"""
     candidates = []
@@ -259,13 +199,13 @@ def extract_and_save_audio(result_json: dict, out_dir: str, subtitle_index: int)
         return save_audio_from_base64(b64_str, out_dir, subtitle_index, fmt)
 
 
-def process_subtitle(subtitle: dict, model: str, reference_file: str, out_dir: str, speed: float, file_index: int) -> str:
+def process_subtitle(subtitle: dict, model: str, reference_file: str, out_dir: str, speed: float, file_index: int, volume: float = None) -> str:
     """处理单条字幕的TTS任务"""
     index = subtitle["index"]
     text = subtitle["text"]
     
     # 提交任务
-    task_id = submit_tts(text, model, reference_file_path=reference_file)
+    task_id = submit_tts(text, model, reference_file_path=reference_file, speed=speed, volume=volume)
     
     # 轮询状态
     result_json = poll_status(task_id)
@@ -273,23 +213,17 @@ def process_subtitle(subtitle: dict, model: str, reference_file: str, out_dir: s
     # 保存音频（使用递增的 file_index 而不是字幕原始序号）
     out_path = extract_and_save_audio(result_json, out_dir, file_index)
     
-    # 倍速处理
-    if abs(speed - 1.0) > 1e-6:
-        out_path = apply_speed_with_ffmpeg(out_path, speed)
-    
     return out_path
 
 
 def main():
-    script_dir = Path(__file__).parent.parent
-    
     # 解析SRT文件
-    srt_path = config.get_absolute_path(SRT_FILE)
+    srt_path = "C:/Users/leidc/Desktop/test/jieshuo_test.txt"
     subtitles = parse_srt(srt_path)
     logger.info(f"找到 {len(subtitles)} 条字幕")
     
     # 检查参考音频
-    reference_audio_path = config.get_absolute_path(REFERENCE_AUDIO)
+    reference_audio_path = "C:/Users/leidc/Desktop/test/audios/xiao_shuai/爆款小帅男声.MP3"
     if not os.path.exists(reference_audio_path):
         logger.error(f"参考音频不存在：{reference_audio_path}")
         return
@@ -302,7 +236,7 @@ def main():
     success_count = 0
     for file_index, subtitle in enumerate(subtitles, start=1):
         try:
-            process_subtitle(subtitle, DEFAULT_MODEL, reference_audio_path, out_dir, SPEED, file_index)
+            process_subtitle(subtitle, DEFAULT_MODEL, reference_audio_path, out_dir, 1.1, file_index, volume=1.0)
             success_count += 1
         except Exception as e:
             logger.error(f"字幕 {subtitle['index']} 处理失败：{e}")
