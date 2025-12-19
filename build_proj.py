@@ -55,6 +55,7 @@ def main():
         "--enable-plugin=numpy",      # 启用 numpy 插件
         f"--jobs={jobs}",  # 多线程编译
         "--include-data-dir=" + str(project_root / "configs") + "=configs",
+        "--include-data-dir=" + str(project_root / "resources") + "=resources",
         "--output-dir=" + str(dist_dir),
         "--output-filename=AI剪辑工具.exe",
     ]
