@@ -1,3 +1,12 @@
+# ==================== 配置源设置 ====================
+# 配置加载方式：仅支持从API获取加密的配置文件
+# 可以通过以下两种方式设置API地址和密钥：
+# 1. 环境变量: CONFIG_API_URL 和 CONFIG_API_KEY（推荐）
+# 2. 本配置文件中的 config_source.api_url 和 config_source.api_key
+config_source:
+  api_url: "your api url"  # 例如: "http://localhost:5000/api/get"
+  api_key: "your api key"  # 例如: "your-secret-key-here"
+
 # ==================== 视频剪辑配置 ====================
 video:
   # 视频文件路径
@@ -39,8 +48,8 @@ tts:
   volume: 1.0
   # API配置
   api:
-    base_url: "http://116.211.238.68:18080"
-    api_key: "7462B06678760F8E49DA271D18F793D5"
+    base_url: "your tts api base url"  # 例如: "http://your-server:port"
+    api_key: "your tts api key"  # 例如: "your-tts-api-key"
     submit_endpoint: "/api/v1/tts/submit"
     status_endpoint: "/api/v1/task/status/{task_id}"
   # 轮询配置
@@ -51,7 +60,23 @@ tts:
 # ==================== 音频转字幕 API 配置 ====================
 audio_to_subtitles:
   # API 地址
-  api_url: "http://116.211.238.68:18080/api/v1/fast_transcribe"
+  api_url: "your audio to subtitles api url"  # 例如: "http://your-server:port/api/v1/fast_transcribe"
   # API 密钥
-  api_key: "3BC34ACCCF0B1EA2815C40DF6D8AE265"
+  api_key: "your audio to subtitles api key"  # 例如: "your-api-key"
+
+# ==================== Dify API 配置 ====================
+# Dify工作流配置，每个工作流有独立的API密钥
+dify:
+  # 用户
+  user: "your dify user"  # 例如: "your-username"
+  # API基础URL（所有工作流共享）
+  base_url: "your dify base url"  # 例如: "http://your-dify-server/v1"
+  # 工作流配置（每个工作流有自己的API密钥）
+  workflows:
+    commentary:
+      api_key: "your commentary workflow api key"  # 例如: "app-xxxxxxxxxxxxx"
+      description: "AI解说_测试_gemini"
+    editing:
+      api_key: "your editing workflow api key"  # 例如: "app-xxxxxxxxxxxxx"
+      description: "AI剪辑_测试_gemini"
 

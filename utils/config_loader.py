@@ -1,32 +1,113 @@
 """
 配置文件加载工具
-提供统一的配置读取接口，支持YAML配置文件
+提供统一的配置读取接口，支持从API获取加密的YAML配置文件
 """
 
-import os
 import sys
 import yaml
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+from configs.get_configs import get_config_content
 
 
 def get_base_path() -> Path:
     """
-    获取程序运行的基础路径（项目根目录）
+    获取程序运行的基础路径（打包内部资源目录）
     
-    - 如果是 PyInstaller 打包后的 exe，返回 exe 所在目录
+    - 如果是 PyInstaller 打包后的 exe（单文件模式），返回临时解压目录 sys._MEIPASS
+    - 如果是 Nuitka 打包后的 exe，返回临时解压目录（通过 __file__ 获取）
     - 如果是开发环境，返回项目根目录
     
     Returns:
         基础路径 Path 对象
     """
     if getattr(sys, 'frozen', False):
-        # PyInstaller 打包后的 exe 环境
-        # sys.executable 是 exe 文件的完整路径
-        return Path(sys.executable).parent
+        # 打包后的 exe 环境
+        # PyInstaller: 使用 sys._MEIPASS
+        if hasattr(sys, '_MEIPASS'):
+            return Path(sys._MEIPASS)
+        # Nuitka: 使用当前模块所在目录（指向临时解压目录）
+        # 在 Nuitka 单文件模式下，__file__ 指向临时解压目录中的文件
+        return Path(__file__).resolve().parent.parent
     else:
         # 开发环境：基于当前文件位置
         return Path(__file__).resolve().parent.parent
+
+
+def get_exe_dir() -> Path:
+    """
+    获取 exe 所在目录（用于日志等外部文件）
+    
+    - 如果是打包环境，返回 exe 所在目录（用于创建 logs 等外部文件）
+    - 如果是开发环境，返回项目根目录
+    
+    Returns:
+        exe 所在目录 Path 对象
+    """
+    if getattr(sys, 'frozen', False):
+        # 打包环境：获取 exe 所在目录
+        # 方法1: 尝试从 sys.argv[0] 获取（Nuitka 单文件模式下更可靠）
+        if sys.argv and sys.argv[0]:
+            argv_path = Path(sys.argv[0])
+            if argv_path.is_absolute():
+                # 如果是绝对路径，检查是否在临时目录
+                argv_str = str(argv_path)
+                # 排除临时目录
+                if not ('AppData\\Local\\Temp' in argv_str or 
+                        '\\Temp\\' in argv_str or 
+                        argv_str.startswith('C:\\Windows\\Temp') or
+                        '\\OneDrive\\' in argv_str and '\\Temp\\' in argv_str):
+                    if argv_path.exists() and argv_path.is_file():
+                        return argv_path.parent.resolve()
+            else:
+                # 如果是相对路径，转换为绝对路径
+                try:
+                    abs_path = argv_path.resolve()
+                    if abs_path.exists() and abs_path.is_file():
+                        abs_str = str(abs_path)
+                        # 排除临时目录
+                        if not ('AppData\\Local\\Temp' in abs_str or 
+                                '\\Temp\\' in abs_str or
+                                abs_str.startswith('C:\\Windows\\Temp')):
+                            return abs_path.parent
+                except:
+                    pass
+        
+        # 方法2: 尝试从 sys.executable 获取
+        exe_path = sys.executable
+        exe_path_str = str(exe_path)
+        # 排除临时目录
+        if not ('AppData\\Local\\Temp' in exe_path_str or 
+                '\\Temp\\' in exe_path_str or
+                exe_path_str.startswith('C:\\Windows\\Temp')):
+            exe_dir = Path(exe_path).parent.resolve()
+            if exe_dir.exists():
+                return exe_dir
+        
+        # 方法3: 如果前两种方法都失败，尝试使用当前工作目录
+        try:
+            cwd = Path.cwd().resolve()
+            if cwd.exists():
+                return cwd
+        except:
+            pass
+        
+        # 方法4: 最后的备用方案 - 使用用户目录
+        return Path.home() / "Desktop"
+    else:
+        # 开发环境：基于当前文件位置
+        return Path(__file__).resolve().parent.parent
+
+
+def get_resources_path() -> Path:
+    """
+    获取 resources 目录路径
+    resources 已打包进 exe，从内部资源目录读取
+    
+    Returns:
+        resources 目录 Path 对象
+    """
+    return get_base_path() / "resources"
 
 
 class ConfigLoader:
@@ -34,7 +115,6 @@ class ConfigLoader:
     
     _instance = None
     _config = None
-    _config_path = None
     
     def __new__(cls):
         """单例模式，确保只有一个配置实例"""
@@ -48,21 +128,17 @@ class ConfigLoader:
             self._load_config()
     
     def _load_config(self):
-        """加载配置文件"""
-        # 获取项目根目录（支持打包环境）
-        project_root = get_base_path()
-        
-        # 配置文件路径
-        self._config_path = project_root / "configs" / "config.yaml"
-        
-        if not self._config_path.exists():
-            raise FileNotFoundError(f"配置文件不存在：{self._config_path}")
-        
-        # 读取YAML配置
-        with open(self._config_path, 'r', encoding='utf-8') as f:
-            self._config = yaml.safe_load(f) or {}
-        
-        print(f"配置文件已加载: {self._config_path}")
+        """从API加载加密的配置文件"""
+        try:
+            # 从 get_configs 模块获取解密后的配置内容
+            config_content = get_config_content()
+            # 解析YAML内容
+            self._config = yaml.safe_load(config_content) or {}
+            if not self._config:
+                raise ValueError("从API获取的配置文件为空")
+            print(f"✓ 配置已从API加载")
+        except Exception as e:
+            raise ValueError(f"从API获取配置失败: {e}")
     
     def reload(self):
         """重新加载配置文件"""
@@ -134,7 +210,10 @@ class ConfigLoader:
     
     def get_absolute_path(self, relative_path: str) -> str:
         """
-        将相对路径转换为绝对路径（相对于项目根目录）
+        将相对路径转换为绝对路径
+        - 如果是 ffmpeg 相关路径，使用 workspace/ffmpeg 目录
+        - 如果是 resources 路径，使用内部资源目录（已打包进 exe）
+        - 其他路径，使用项目根目录
         
         Args:
             relative_path: 相对路径
@@ -146,9 +225,24 @@ class ConfigLoader:
             >>> config = get_config()
             >>> abs_path = config.get_absolute_path("resources/dst/videos/final_clip.mp4")
         """
+        import os
         if os.path.isabs(relative_path):
             return relative_path
         
+        # 如果是 ffmpeg 相关路径，使用 workspace/ffmpeg 目录
+        if "ffmpeg" in relative_path.lower() and relative_path.endswith(".exe"):
+            workspace_path = self.get_workspace_path()
+            # 提取文件名（如 ffmpeg.exe, ffprobe.exe）
+            filename = Path(relative_path).name
+            ffmpeg_path = workspace_path / "ffmpeg" / filename
+            return str(ffmpeg_path)
+        
+        # 如果是 resources 路径，使用内部资源目录（已打包进 exe）
+        if relative_path.startswith("resources/"):
+            base_path = get_base_path()
+            return str(base_path / relative_path)
+        
+        # 其他路径使用项目根目录
         project_root = self.get_project_root()
         return str(project_root / relative_path)
 
