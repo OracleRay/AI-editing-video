@@ -10,6 +10,7 @@ import sys
 # 添加utils目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.loggers import get_logger
+from utils.config_loader import get_resources_path
 
 logger = get_logger('video_to_audio', silent=True)
 
@@ -35,9 +36,11 @@ def convert_video_to_audio(input_path: Path, output_path: Path) -> None:
     - input_path: 输入视频文件路径
     - output_path: 输出音频文件路径（通过后缀决定编码）
     """
-    # 使用项目中的 ffmpeg
-    project_root = Path(__file__).parent.parent
-    ffmpeg_path = project_root / "resources" / "src" / "ffmpeg" / "ffmpeg.exe"
+    # 使用 workspace/ffmpeg 目录中的 ffmpeg
+    from utils.config_loader import get_config
+    config = get_config()
+    workspace_path = config.get_workspace_path()
+    ffmpeg_path = workspace_path / "ffmpeg" / "ffmpeg.exe"
     
     if not ffmpeg_path.exists():
         raise RuntimeError(f"未找到 ffmpeg: {ffmpeg_path}")
@@ -95,5 +98,6 @@ if __name__ == "__main__":
         logger.info(f"✓ 转换成功: {output_file.name}")
     except Exception as e:
         logger.error(f"✗ 转换失败 {video_file.name}: {e}")
+
 
 

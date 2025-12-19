@@ -13,7 +13,8 @@ from typing import Dict, Optional
 def _get_base_path() -> Path:
     """获取程序基础路径"""
     if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
+        # 单文件模式：资源在 sys._MEIPASS 临时目录
+        return Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
     else:
         return Path(__file__).resolve().parent.parent.parent
 
@@ -552,22 +553,32 @@ class MultiCommentaryPanel(ttk.Frame):
     def _start_processing(self):
         """开始处理"""
         if not self.clip_srt_file or not self.edited_video:
-            show_error_message(self.winfo_toplevel(), "请先选择所有必需的文件")
+            error_msg = "请先选择所有必需的文件"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         if not self.export_dir_var.get().strip():
-            show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            error_msg = "请先选择剪映导出目录"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         if not self.clone_audio_path:
-            show_error_message(self.winfo_toplevel(), "请先选择克隆声音文件")
+            error_msg = "请先选择克隆声音文件"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         
         try:
             count = int(self.count_spinbox.get())
             if count < 1 or count > 10:
-                show_error_message(self.winfo_toplevel(), "生成次数必须在 1-10 之间")
+                error_msg = "生成次数必须在 1-10 之间"
+                self._log_result(f"❌ 错误: {error_msg}\n")
+                show_error_message(self.winfo_toplevel(), error_msg)
                 return
         except ValueError:
-            show_error_message(self.winfo_toplevel(), "生成次数必须是数字")
+            error_msg = "生成次数必须是数字"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         
         self._log_result("\n" + "="*60 + "\n")
@@ -739,3 +750,4 @@ class MultiCommentaryPanel(ttk.Frame):
         self._auto_select_video()
         self._check_ready()
         self._log_result("\n✅ 已一键自动选择字幕和视频文件\n")
+

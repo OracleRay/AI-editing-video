@@ -1,6 +1,12 @@
 import numpy as np
 import subprocess
 import os
+import sys
+from pathlib import Path
+
+# 添加项目路径
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.config_loader import get_resources_path
 
 def get_high_volume_intervals(audio_path, interval_sec=6, chunk_length_ms=100):
     """
@@ -16,11 +22,11 @@ def get_high_volume_intervals(audio_path, interval_sec=6, chunk_length_ms=100):
     """
     print(f"正在分析音频文件: {audio_path}\n")
     
-    # 使用ffmpeg转换音频为原始PCM格式
-    import os
-    from pathlib import Path
-    project_root = Path(__file__).parent.parent
-    ffmpeg_path = str(project_root / "resources" / "src" / "ffmpeg" / "ffmpeg.exe")
+    # 使用ffmpeg转换音频为原始PCM格式（从 workspace/ffmpeg 目录读取）
+    from utils.config_loader import get_config
+    config = get_config()
+    workspace_path = config.get_workspace_path()
+    ffmpeg_path = str(workspace_path / "ffmpeg" / "ffmpeg.exe")
     
     cmd = [
         ffmpeg_path,
@@ -108,5 +114,8 @@ if __name__ == "__main__":
     audio_file = "../resources/src/audios/邻居也疯狂第4集.mp3"
     
     # 分析音频，找到6秒区间内音量大于平均值的区间
+    high_intervals, avg_volume = get_high_volume_intervals(audio_file, interval_sec=5, chunk_length_ms=100)
+
+
     high_intervals, avg_volume = get_high_volume_intervals(audio_file, interval_sec=5, chunk_length_ms=100)
 

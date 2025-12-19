@@ -11,7 +11,7 @@ from pathlib import Path
 # 添加utils目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from services.tts_client import parse_srt as tts_parse_srt, process_subtitle, ensure_output_dir
-from utils.config_loader import get_config, get_workspace_path
+from utils.config_loader import get_config, get_resources_path, get_workspace_path
 from utils.meta_json import *
 from utils.loggers import get_logger
 from utils.subtitle_detector import detect_subtitle_position
@@ -19,7 +19,7 @@ from utils.gen_jieShuo_srt import batch_convert_mp3_to_srt
 
 # === 加载配置 ===
 config = get_config()
-FFPROBE_PATH = config.get('ffmpeg.ffprobe_path')
+FFPROBE_PATH = config.get_absolute_path(config.get('ffmpeg.ffprobe_path'))
 logger = get_logger('gen_json', silent=True)
 
 # === 转场配置 ===
@@ -119,7 +119,7 @@ def gen_id():
 def get_audio_duration(audio_path):
     """获取音频文件的实际时长（微秒）"""
     try:
-        ffprobe_abs_path = config.get_absolute_path(FFPROBE_PATH)
+        ffprobe_abs_path = FFPROBE_PATH
         # Windows 下隐藏命令行窗口
         creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         result = subprocess.run(
@@ -138,7 +138,7 @@ def get_audio_duration(audio_path):
 def get_video_dimensions(video_path):
     """获取视频文件的真实宽度和高度，返回 (width, height, aspect_ratio_name)"""
     try:
-        ffprobe_abs_path = config.get_absolute_path(FFPROBE_PATH)
+        ffprobe_abs_path = FFPROBE_PATH
         # Windows 下隐藏命令行窗口
         creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         result = subprocess.run(

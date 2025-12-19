@@ -11,11 +11,25 @@ from tkinter import ttk
 import sys
 from pathlib import Path
 
+# 设置 DPI 感知（Windows 高 DPI 支持）
+if sys.platform == 'win32':
+    try:
+        # Windows 10/11 高 DPI 支持
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_PER_MONITOR_DPI_AWARE
+    except:
+        pass
+
 # 添加项目根目录到路径（支持打包环境）
 def _get_base_path() -> Path:
-    """获取程序基础路径"""
+    """获取程序基础路径（打包内部资源）"""
     if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
+        # 打包后的 exe 环境
+        # PyInstaller: 使用 sys._MEIPASS
+        if hasattr(sys, '_MEIPASS'):
+            return Path(sys._MEIPASS)
+        # Nuitka: 使用当前模块所在目录（指向临时解压目录）
+        return Path(__file__).resolve().parent.parent
     else:
         return Path(__file__).resolve().parent.parent
 
@@ -23,12 +37,23 @@ project_root = _get_base_path()
 sys.path.insert(0, str(project_root))
 
 # 初始化日志系统（只打印一次）
-from utils.loggers import get_app_logger
-get_app_logger()
+try:
+    from utils.loggers import get_app_logger
+    logger = get_app_logger()
+except Exception as e:
+    # 如果日志系统初始化失败，使用基础日志
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger('main')
+    logger.error(f"日志系统初始化失败: {e}")
 
-from UI.components.editing_panel import EditingPanel
-from UI.components.full_pipeline_panel import FullPipelinePanel
-from UI.components.multi_commentary_panel import MultiCommentaryPanel
+try:
+    from UI.components.editing_panel import EditingPanel
+    from UI.components.full_pipeline_panel import FullPipelinePanel
+    from UI.components.multi_commentary_panel import MultiCommentaryPanel
+except Exception as e:
+    logger.error(f"导入 UI 组件失败: {e}", exc_info=True)
+    raise
 
 
 class VideoProcessingApp:
@@ -56,10 +81,31 @@ class VideoProcessingApp:
         self.root.withdraw()
         
         self.root.geometry("1000x750")
-        # 设置图标（使用动态路径）
-        icon_path = project_root / "resources" / "ui" / "icon.ico"
+        # 设置图标（resources 已打包进 exe）
+        from utils.config_loader import get_resources_path
+        resources_path = get_resources_path()
+        icon_path = resources_path / "ui" / "icon.ico"
+
         if icon_path.exists():
-            self.root.iconbitmap(str(icon_path))
+            try:
+                self.root.iconbitmap(str(icon_path))
+            except Exception as e:
+                # 图标加载失败不影响程序运行，只记录错误
+                logger.warning(f"⚠️ 图标加载失败: {e}")
+                logger.warning(f"   图标路径: {icon_path}")
+        else:
+            logger.warning(f"⚠️ 图标文件不存在: {icon_path}")
+            logger.warning(f"   resources 路径: {resources_path}")
+            if resources_path.exists():
+                logger.info(f"   resources 目录存在，但找不到 ui/icon.ico")
+                try:
+                    if resources_path.is_dir():
+                        contents = list(resources_path.iterdir())
+                        logger.info(f"   resources 目录内容: {[str(c.name) for c in contents]}")
+                except Exception as e:
+                    logger.warning(f"   无法列出 resources 目录内容: {e}")
+            else:
+                logger.warning(f"   resources 目录不存在，可能打包时未包含 resources")
         
         # 设置最小窗口大小（两列布局）
         self.root.minsize(1100, 650)
@@ -78,6 +124,16 @@ class VideoProcessingApp:
         
         # 显示窗口
         self.root.deiconify()
+        
+        # 检查 ffmpeg 文件（在界面创建后检查，以便在日志框显示提示）
+        self.root.after(200, self._check_ffmpeg_files)
+        
+        # 强制更新窗口，确保渲染完成（解决打包后显示问题）
+        self.root.update_idletasks()
+        self.root.update()
+        
+        # 触发一次重绘（解决打包后初始显示问题）
+        self.root.after(100, lambda: self.root.update_idletasks())
     
     def _setup_style(self):
         """设置现代化主题样式"""
@@ -253,7 +309,7 @@ class VideoProcessingApp:
         self.notebook = ttk.Notebook(content_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=(10, 20))
         
-        # 功能 1：完整处理流程
+        # 功能 1：完整处理流程（先创建，用于显示 ffmpeg 检查提示）
         self.full_pipeline_panel = FullPipelinePanel(self.notebook)
         self.notebook.add(self.full_pipeline_panel, text="  🎯 完整处理流程  ")
         
@@ -278,6 +334,50 @@ class VideoProcessingApp:
             background=self.COLORS['panel_bg']
         )
         info_label.pack(pady=10)
+    
+    def _check_ffmpeg_files(self):
+        """检查 workspace/ffmpeg 目录下的 ffmpeg 文件"""
+        try:
+            from utils.config_loader import get_config
+            config = get_config()
+            workspace_path = config.get_workspace_path()
+            ffmpeg_dir = workspace_path / "ffmpeg"
+            
+            # 需要检查的三个文件
+            required_files = ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe"]
+            missing_files = []
+            
+            for filename in required_files:
+                file_path = ffmpeg_dir / filename
+                if not file_path.exists():
+                    missing_files.append(filename)
+            
+            # 如果有缺失的文件，在日志框显示提示
+            if missing_files and hasattr(self, 'full_pipeline_panel'):
+                try:
+                    log_msg = f"\n⚠️ FFmpeg 文件缺失提示\n"
+                    log_msg += f"{'='*60}\n"
+                    log_msg += f"检测到 workspace/ffmpeg 目录下缺少以下文件：\n"
+                    for filename in missing_files:
+                        log_msg += f"  - {filename}\n"
+                    log_msg += f"\n请将以下文件添加到：{ffmpeg_dir}\n"
+                    log_msg += f"  1. ffmpeg.exe\n"
+                    log_msg += f"  2. ffprobe.exe\n"
+                    log_msg += f"  3. ffplay.exe\n"
+                    log_msg += f"\n添加后请重启应用程序。\n"
+                    log_msg += f"{'='*60}\n\n"
+                    self.full_pipeline_panel._log_result(log_msg)
+                except Exception as e:
+                    logger.warning(f"无法在日志框显示 ffmpeg 提示: {e}")
+            
+            # 记录到日志系统
+            if missing_files:
+                logger.warning(f"FFmpeg 文件缺失: {missing_files}")
+                logger.warning(f"请将文件添加到: {ffmpeg_dir}")
+            else:
+                logger.info(f"✓ FFmpeg 文件检查通过: {ffmpeg_dir}")
+        except Exception as e:
+            logger.error(f"检查 FFmpeg 文件时出错: {e}", exc_info=True)
     
     def _center_window(self):
         """将窗口居中显示"""
@@ -305,8 +405,30 @@ class VideoProcessingApp:
 
 def main():
     """主函数"""
-    app = VideoProcessingApp()
-    app.run()
+    try:
+        app = VideoProcessingApp()
+        app.run()
+    except Exception as e:
+        # 捕获所有异常，避免闪退
+        import traceback
+        error_msg = f"程序启动失败: {e}\n\n{traceback.format_exc()}"
+        print(error_msg)
+        # 尝试写入日志文件
+        try:
+            from utils.loggers import get_app_logger
+            logger = get_app_logger()
+            logger.critical(error_msg)
+        except:
+            pass
+        # 如果有窗口，显示错误对话框
+        try:
+            import tkinter.messagebox as messagebox
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("程序启动失败", f"程序启动时发生错误：\n\n{str(e)}\n\n详细信息请查看日志文件。")
+        except:
+            pass
+        raise
 
 
 if __name__ == "__main__":

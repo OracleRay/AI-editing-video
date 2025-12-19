@@ -12,7 +12,8 @@ import sys
 def _get_base_path() -> Path:
     """获取程序基础路径"""
     if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
+        # 单文件模式：资源在 sys._MEIPASS 临时目录
+        return Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
     else:
         return Path(__file__).resolve().parent.parent.parent
 
@@ -283,7 +284,9 @@ class EditingPanel(ttk.Frame):
     def _start_processing(self):
         """开始处理"""
         if not self.video_path:
-            show_error_message(self.winfo_toplevel(), "请先选择视频文件")
+            error_msg = "请先选择视频文件"
+            self._log_result(f"❌ 错误: {error_msg}\n", 'error')
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         
         self._log_result("\n" + "="*60 + "\n", 'info')
@@ -395,3 +398,4 @@ class EditingPanel(ttk.Frame):
         self.result_text.insert(tk.END, message)
         self.result_text.see(tk.END)
         self.result_text.update()
+

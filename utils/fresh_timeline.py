@@ -97,8 +97,8 @@ def fresh_timeline(input_srt_path, output_srt_path):
 
 if __name__ == "__main__":
     # 示例用法
-    input_file = "../test/test_1.txt"
-    output_file = "C:/Users/leidc/Desktop/workspace/srt_files/clip/test_fresh.txt"
+    input_file = "C:/Users/leidc/Desktop/test.txt"
+    output_file = "C:/Users/leidc/Desktop/test_fresh.txt"
     
     fresh_timeline(input_file, output_file)
 

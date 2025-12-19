@@ -11,7 +11,8 @@ from typing import Dict, Any, Optional, Callable
 def _get_base_path() -> Path:
     """获取程序基础路径"""
     if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
+        # 单文件模式：资源在 sys._MEIPASS 临时目录
+        return Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
     else:
         return Path(__file__).resolve().parent.parent.parent
 
@@ -372,4 +373,5 @@ class PipelineService:
             步骤数据字典
         """
         return self.step_data.copy()
+
 

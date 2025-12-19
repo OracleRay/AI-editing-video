@@ -99,16 +99,19 @@ audio_to_subtitles:
 
 ### 2. 配置 Dify 工作流
 
-编辑 `configs/dify.yaml` 配置 AI 工作流 API：
+编辑 `configs/config.yaml` 中的 `dify` 部分配置 AI 工作流 API：
 
 ```yaml
-editing:
-  api_key: "your-editing-api-key"
-  workflow_id: "your-workflow-id"
-
-commentary:
-  api_key: "your-commentary-api-key"
-  workflow_id: "your-workflow-id"
+dify:
+  user: "your-user-name"
+  base_url: "http://your-dify-server/v1"
+  workflows:
+    commentary:
+      api_key: "your-commentary-api-key"
+      description: "AI解说工作流"
+    editing:
+      api_key: "your-editing-api-key"
+      description: "AI剪辑工作流"
 ```
 
 ### 3. 启动应用
@@ -127,8 +130,7 @@ python UI/main.py
 ```
 common_video/
 ├── configs/                # 配置文件
-│   ├── config.yaml        # 主配置
-│   └── dify.yaml          # Dify API 配置
+│   └── config.yaml        # 主配置（包含所有配置，包括 Dify API）
 ├── core/                   # 核心功能
 │   ├── gen_json.py        # 剪映项目生成
 │   └── video_editing.py   # 视频剪辑
@@ -298,7 +300,7 @@ result9 = step9_generate_capcut_project(
 
 ```bash
 pyinstaller --onefile --windowed --icon=resources/ui/icon.ico --name=视频剪辑工具 UI/main.py
-pyinstaller 视频剪辑工具.spec
+pyinstaller ai_editing.spec
 ```
 
 ## 🤝 贡献

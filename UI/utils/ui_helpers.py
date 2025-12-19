@@ -127,34 +127,16 @@ def show_success_message(parent, message: str):
 
 def show_error_message(parent, message: str):
     """
-    显示错误消息
+    显示错误消息（仅记录日志，不弹窗）
     
     Args:
-        parent: 父窗口
+        parent: 父窗口（保留参数以兼容现有调用）
         message: 错误消息
     """
-    dialog = tk.Toplevel(parent)
-    dialog.title("错误")
-    dialog.geometry("400x200")
-    dialog.resizable(False, False)
-    
-    # 居中显示
-    dialog.transient(parent)
-    dialog.grab_set()
-    
-    # 错误图标和消息
-    frame = ttk.Frame(dialog)
-    frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
-    
-    icon_label = ttk.Label(frame, text="❌", font=("微软雅黑", 30))
-    icon_label.pack(pady=10)
-    
-    msg_label = ttk.Label(frame, text=message, font=("微软雅黑", 10), wraplength=350)
-    msg_label.pack(pady=10)
-    
-    # 确定按钮
-    ok_button = ttk.Button(dialog, text="确定", command=dialog.destroy)
-    ok_button.pack(pady=10)
+    # 只记录日志，不弹窗
+    from utils.loggers import get_app_logger
+    logger = get_app_logger()
+    logger.error(f"错误: {message}")
 
 
 def create_labeled_entry(parent, label_text: str, row: int, default_text: str = "") -> ttk.Entry:

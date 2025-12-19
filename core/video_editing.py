@@ -3,20 +3,34 @@ import os
 import uuid
 import subprocess
 from datetime import datetime
+from pathlib import Path
+
 from utils.config_loader import get_config
 from utils.loggers import get_logger
 
 # === 加载配置 ===
-config = get_config()
-logger = get_logger('video_editing', silent=True)
-
-# # 获取视频剪辑配置（转换为绝对路径）
-TEMP_DIR = config.get_workspace_path("videos/temp")  # 临时文件目录
-OUTPUT_DIR = config.get_workspace_path("videos")  # 输出目录
-
-# 获取FFmpeg配置（转换为绝对路径）
-FFMPEG_PATH = config.get_absolute_path(config.get("ffmpeg.ffmpeg_path"))  # ffmpeg路径
-FFPROBE_PATH = config.get_absolute_path(config.get("ffmpeg.ffprobe_path"))  # ffprobe路径
+try:
+    config = get_config()
+    logger = get_logger('video_editing', silent=True)
+    
+    # # 获取视频剪辑配置（转换为绝对路径）
+    TEMP_DIR = config.get_workspace_path("videos/temp")  # 临时文件目录
+    OUTPUT_DIR = config.get_workspace_path("videos")  # 输出目录
+    
+    # 获取FFmpeg配置（从 workspace/ffmpeg 目录读取）
+    workspace_path = config.get_workspace_path()
+    FFMPEG_PATH = str(workspace_path / "ffmpeg" / "ffmpeg.exe")
+    FFPROBE_PATH = str(workspace_path / "ffmpeg" / "ffprobe.exe")
+except Exception as e:
+    # 如果初始化失败，使用默认值，避免程序崩溃
+    import logging
+    logger = logging.getLogger('video_editing')
+    logger.error(f"初始化配置失败: {e}", exc_info=True)
+    from pathlib import Path
+    TEMP_DIR = Path.home() / "Desktop" / "workspace" / "videos" / "temp"
+    OUTPUT_DIR = Path.home() / "Desktop" / "workspace" / "videos"
+    FFMPEG_PATH = str(Path.home() / "Desktop" / "workspace" / "ffmpeg" / "ffmpeg.exe")
+    FFPROBE_PATH = str(Path.home() / "Desktop" / "workspace" / "ffmpeg" / "ffprobe.exe")
 
 # === 工具函数 ===
 def parse_srt(srt_path):

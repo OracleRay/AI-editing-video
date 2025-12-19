@@ -7,7 +7,7 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Optional
-from utils.config_loader import get_config
+from utils.config_loader import get_config, get_resources_path
 from utils.loggers import get_logger
 
 config = get_config()
@@ -24,6 +24,7 @@ def get_audio_duration(audio_path: str) -> float:
     Returns:
         音频时长（秒）
     """
+    # 使用配置中的路径（已支持打包环境）
     ffprobe_path = config.get_absolute_path(config.get('ffmpeg.ffprobe_path'))
     
     # Windows 下隐藏命令行窗口
@@ -73,6 +74,7 @@ def adjust_bgm_for_video(
     Returns:
         处理后的音频文件路径
     """
+    # 使用配置中的路径（已支持打包环境）
     ffmpeg_path = config.get_absolute_path(config.get('ffmpeg.ffmpeg_path'))
     
     # 获取BGM时长
@@ -138,6 +140,7 @@ def adjust_audio_volume(
     Returns:
         处理后的音频文件路径
     """
+    # 使用配置中的路径（已支持打包环境）
     ffmpeg_path = config.get_absolute_path(config.get('ffmpeg.ffmpeg_path'))
     
     # 确保输出目录存在

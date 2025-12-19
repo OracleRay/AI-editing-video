@@ -2,6 +2,16 @@ import numpy as np
 import subprocess
 import re
 import os
+import sys
+from pathlib import Path
+
+
+def _get_exe_dir() -> Path:
+    """获取 exe 所在目录（用于外部资源如 resources）"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).resolve().parent.parent
 
 
 def parse_srt_time(time_str):
@@ -88,10 +98,11 @@ def analyze_audio_segment(audio_path, start_time, end_time, chunk_length_ms=100)
     返回:
         tuple: (时间点列表, 音量列表)
     """
-    # 使用ffmpeg提取音频片段
-    from pathlib import Path
-    project_root = Path(__file__).parent.parent
-    ffmpeg_path = str(project_root / "resources" / "src" / "ffmpeg" / "ffmpeg.exe")
+    # 使用ffmpeg提取音频片段（从 workspace/ffmpeg 目录读取）
+    from utils.config_loader import get_config
+    config = get_config()
+    workspace_path = config.get_workspace_path()
+    ffmpeg_path = str(workspace_path / "ffmpeg" / "ffmpeg.exe")
     
     duration = end_time - start_time
     
@@ -295,6 +306,15 @@ if __name__ == "__main__":
     
     # 裁剪字幕，删除低音量片段
     # threshold_db: 音量阈值，默认-50dB，可以根据实际情况调整（-60到-40之间）
+    # min_duration_sec: 最小持续时间，只删除持续超过此时间的低音量片段，默认0.3秒
+    output_file = trim_srt_by_audio_volume(
+        srt_file, 
+        audio_file, 
+        threshold_db=-45,  # 可调整
+        min_duration_sec=0.3  # 可调整
+    )
+
+
     # min_duration_sec: 最小持续时间，只删除持续超过此时间的低音量片段，默认0.3秒
     output_file = trim_srt_by_audio_volume(
         srt_file, 

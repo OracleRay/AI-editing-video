@@ -10,12 +10,14 @@ import json
 import requests
 from pathlib import Path
 from typing import Any, Dict, Optional
+from utils.config_loader import get_config
 
 
 def _get_base_path() -> Path:
     """获取程序基础路径（支持打包环境）"""
     if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
+        # 单文件模式：资源在 sys._MEIPASS 临时目录
+        return Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
     else:
         return Path(__file__).resolve().parent.parent
 
@@ -47,25 +49,21 @@ class DifyClient:
     
     def _load_dify_config(self) -> Dict[str, Any]:
         """
-        加载 Dify 配置文件
+        加载 Dify 配置文件（从 config.yaml 的 dify 部分读取）
         
         Returns:
             配置字典
         """
-        # 获取项目根目录（支持打包环境）
-        project_root = _get_base_path()
+        # 使用统一的配置加载器
+        config_loader = get_config()
         
-        # Dify 配置文件路径
-        config_path = project_root / "configs" / "dify.yaml"
+        # 从 config.yaml 中获取 dify 配置部分
+        dify_config = config_loader.get_section('dify')
         
-        if not config_path.exists():
-            raise FileNotFoundError(f"Dify 配置文件不存在：{config_path}")
+        if not dify_config:
+            raise ValueError("config.yaml 中未找到 'dify' 配置部分")
         
-        # 读取 YAML 配置
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f) or {}
-        
-        return config
+        return dify_config
     
     def upload_file(self, content: str, filename: str = "input.txt") -> Dict[str, Any]:
         """

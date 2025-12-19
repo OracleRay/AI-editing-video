@@ -13,7 +13,13 @@ from typing import Dict, Optional
 def _get_base_path() -> Path:
     """获取程序基础路径"""
     if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
+        # 单文件模式：资源在 sys._MEIPASS 临时目录（PyInstaller）
+        # 对于 Nuitka，使用 sys.executable 的父目录
+        if hasattr(sys, '_MEIPASS'):
+            return Path(sys._MEIPASS)
+        else:
+            # Nuitka 单文件模式
+            return Path(sys.executable).parent
     else:
         return Path(__file__).resolve().parent.parent.parent
 
@@ -432,8 +438,6 @@ class FullPipelinePanel(ttk.Frame):
     
     def _select_video_or_folder(self):
         """选择视频文件或文件夹（弹出选择对话框）"""
-        from tkinter import messagebox
-        
         # 创建一个顶层窗口用于选择
         choice_window = tk.Toplevel(self.winfo_toplevel())
         choice_window.title("选择方式")
@@ -734,13 +738,19 @@ class FullPipelinePanel(ttk.Frame):
     def _start_processing(self):
         """开始处理"""
         if not self.video_paths:
-            show_error_message(self.winfo_toplevel(), "请先选择视频文件或文件夹")
+            error_msg = "请先选择视频文件或文件夹"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         if not self.export_dir_var.get().strip():
-            show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            error_msg = "请先选择剪映导出目录"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         if not self.clone_audio_path:
-            show_error_message(self.winfo_toplevel(), "请先选择克隆声音文件")
+            error_msg = "请先选择克隆声音文件"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         
         # 重置进度行标记
@@ -925,12 +935,11 @@ class FullPipelinePanel(ttk.Frame):
         self._log_result("\n")
         self._log_result("="*60 + "\n")
         
-        # 只有全部失败时才弹窗提示
+        # 只有全部失败时才记录错误（已在日志中显示，不再弹窗）
         if success_count == 0 and total > 0:
-            show_error_message(
-                self.winfo_toplevel(), 
-                f"所有视频处理失败，请查看日志了解详情"
-            )
+            error_msg = "所有视频处理失败，请查看日志了解详情"
+            self._log_result(f"\n❌ {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
     
     def _on_plot_text_modified(self, event):
         """剧情文本修改事件处理"""
@@ -1003,19 +1012,27 @@ class FullPipelinePanel(ttk.Frame):
     def _start_loop_processing(self):
         """开始循环处理"""
         if not self.video_paths:
-            show_error_message(self.winfo_toplevel(), "请先选择视频文件或文件夹")
+            error_msg = "请先选择视频文件或文件夹"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         if not self.export_dir_var.get().strip():
-            show_error_message(self.winfo_toplevel(), "请先选择剪映导出目录")
+            error_msg = "请先选择剪映导出目录"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         if not self.clone_audio_path:
-            show_error_message(self.winfo_toplevel(), "请先选择克隆声音文件")
+            error_msg = "请先选择克隆声音文件"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         
         # 获取循环次数
         loop_count = self.loop_count_var.get()
         if loop_count < 2:
-            show_error_message(self.winfo_toplevel(), "循环次数至少为 2 次")
+            error_msg = "循环次数至少为 2 次"
+            self._log_result(f"❌ 错误: {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
             return
         
         # 重置进度行标记
@@ -1190,9 +1207,8 @@ class FullPipelinePanel(ttk.Frame):
         self._log_result(f"   成功 {success_count} 次，失败 {len(failed_results)} 次\n")
         self._log_result("="*60 + "\n")
         
-        # 只有全部失败时才弹窗提示
+        # 只有全部失败时才记录错误（已在日志中显示，不再弹窗）
         if success_count == 0 and total_processed > 0:
-            show_error_message(
-                self.winfo_toplevel(), 
-                f"所有循环处理均失败，请查看日志了解详情"
-            )
+            error_msg = "所有循环处理均失败，请查看日志了解详情"
+            self._log_result(f"\n❌ {error_msg}\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
