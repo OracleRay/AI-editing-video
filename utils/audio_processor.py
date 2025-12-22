@@ -5,9 +5,7 @@
 
 import os
 import subprocess
-from pathlib import Path
-from typing import Optional
-from utils.config_loader import get_config, get_resources_path
+from utils.config_loader import get_config
 from utils.loggers import get_logger
 
 config = get_config()
