@@ -498,10 +498,40 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
                     if subtitle_duration <= 0:
                         continue
 
+                    # 根据蒙版高度动态调整字幕大小
+                    # 如果检测到了原字幕位置，使用其高度来匹配新字幕大小
+                    if subtitle_position and 'height' in subtitle_position:
+                        # 获取检测到的原字幕高度（像素）
+                        detected_subtitle_height = subtitle_position['height']
+                        
+                        size_ratio = 0.85
+                        calculated_text_size = int(detected_subtitle_height * size_ratio)
+                        
+                        # 限制在合理范围内（10-100像素）
+                        calculated_text_size = max(10, min(100, calculated_text_size))
+                        
+                        # text_size 和 font_size 的关系大致是：font_size ≈ text_size / 6
+                        calculated_font_size = max(1.0, min(20.0, calculated_text_size / 6.0))
+                        
+                        logger.info(f"   根据蒙版高度调整字幕: 原高度={detected_subtitle_height}px, "
+                                   f"新字幕大小={calculated_text_size}px, font_size={calculated_font_size:.1f}")
+                    else:
+                        # 如果没有检测到原字幕，使用默认值或根据视频尺寸判断
+                        if aspect_ratio in ["9:16", "9:21"] or canvas_width < canvas_height:
+                            # 竖屏视频：使用更大的默认字体
+                            calculated_font_size = 6.0
+                            calculated_text_size = 45
+                        else:
+                            # 横屏视频：使用默认字体
+                            calculated_font_size = 5.0
+                            calculated_text_size = 30
+
                     # 创建字幕材料
                     text_material = create_text_material(
                         text_id=text_id,
-                        text_content=sub_text.strip()
+                        text_content=sub_text.strip(),
+                        font_size=calculated_font_size,
+                        text_size=calculated_text_size
                     )
                     text_materials.append(text_material)
 
