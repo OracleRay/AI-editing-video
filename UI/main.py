@@ -83,9 +83,11 @@ class VideoProcessingApp:
         self.root.geometry("1000x750")
         # 设置图标（resources 已打包进 exe）
         from utils.config_loader import get_resources_path
+        from PIL import Image
         resources_path = get_resources_path()
-        icon_path = resources_path / "ui" / "icon.ico"
-
+        icon_path = resources_path / "ui" / "icon.png"
+        img = Image.open(icon_path)
+        img.save(icon_path, format='ICO', sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])
         if icon_path.exists():
             try:
                 self.root.iconbitmap(str(icon_path))
@@ -97,7 +99,6 @@ class VideoProcessingApp:
             logger.warning(f"⚠️ 图标文件不存在: {icon_path}")
             logger.warning(f"   resources 路径: {resources_path}")
             if resources_path.exists():
-                logger.info(f"   resources 目录存在，但找不到 ui/icon.ico")
                 try:
                     if resources_path.is_dir():
                         contents = list(resources_path.iterdir())

@@ -39,7 +39,7 @@ def main():
         return 1
     
     # Nuitka 命令
-    icon_path = project_root / "resources" / "ui" / "icon.ico"
+    icon_path = project_root / "resources" / "ui" / "icon.png"
     
     # 获取 CPU 核心数，用于多线程编译
     cpu_count = multiprocessing.cpu_count()
