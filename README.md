@@ -163,7 +163,7 @@ common_video/
 │   │   ├── ffmpeg/        # FFmpeg 可执行文件
 │   │   └── srt_files/     # SRT 字幕文件
 │   └── ui/
-│       └── icon.ico       # 应用图标
+│       └── ai_cut.ico     # 应用图标
 ├── step.py                 # 处理步骤定义
 └── requirements.txt        # 依赖列表
 ```
@@ -299,7 +299,7 @@ result9 = step9_generate_capcut_project(
 使用 PyInstaller 打包为可执行文件（以下命令执行其一即可）：
 
 ```bash
-pyinstaller --onefile --windowed --icon=resources/ui/icon.ico --name=视频剪辑工具 UI/main.py
+pyinstaller --onefile --windowed --icon=resources/ui/ai_cut.ico --name=视频剪辑工具 UI/main.py
 pyinstaller ai_editing.spec
 ```
 
