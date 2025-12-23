@@ -16,6 +16,9 @@ import base64
 from io import BytesIO
 import tempfile
 import shutil
+import re
+from difflib import SequenceMatcher
+from collections import defaultdict
 from utils.loggers import get_logger
 
 # 初始化日志记录器
@@ -219,6 +222,177 @@ def extract_subtitle_info(json_path):
     return subtitle_info
 
 
+def remove_punctuation(text):
+    """
+    去除文本中的标点符号
+    
+    Args:
+        text: 输入文本
+    
+    Returns:
+        str: 去除标点符号后的文本
+    """
+    # 定义中文和英文标点符号
+    punctuation = r'[，。！？；：、""''（）【】《》〈〉「」『』〔〕〖〗〘〙〚〛…—–·～•·\s]'
+    # 去除标点符号和空白字符
+    text_no_punct = re.sub(punctuation, '', text)
+    return text_no_punct
+
+
+def calculate_text_similarity(text1, text2):
+    """
+    计算两个文本的相似度（去掉标点符号后）
+    
+    Args:
+        text1: 文本1
+        text2: 文本2
+    
+    Returns:
+        float: 相似度（0-1之间）
+    """
+    text1_clean = remove_punctuation(text1)
+    text2_clean = remove_punctuation(text2)
+    
+    if not text1_clean or not text2_clean:
+        return 0.0
+    
+    # 使用SequenceMatcher计算相似度
+    similarity = SequenceMatcher(None, text1_clean, text2_clean).ratio()
+    return similarity
+
+
+def filter_interference_subtitles(all_texts, video_height, similarity_threshold=0.85, min_frequency_ratio=0.5):
+    """
+    过滤干扰字幕（如"虚拟剧情 请勿模仿"等固定字幕）
+    
+    判断标准：
+    1. 相似度阈值：85%以上
+    2. 出现频率：≥ 50% 的帧
+    3. 判断范围：只检查底部1/3区域的文本
+    
+    Args:
+        all_texts: 所有文本的位置信息列表
+        video_height: 视频高度（像素）
+        similarity_threshold: 相似度阈值，默认0.85
+        min_frequency_ratio: 最小出现频率比例，默认0.5（50%）
+    
+    Returns:
+        tuple: (filtered_texts, interference_groups)
+            filtered_texts: 过滤后的文本列表（所有区域的文本，但底部1/3的干扰字幕已被过滤）
+            interference_groups: 检测到的干扰字幕组列表（用于后续验证）
+    """
+    if not all_texts:
+        logger.warning("⚠️  all_texts为空，跳过过滤")
+        return all_texts, []
+    
+    if not video_height:
+        logger.warning("⚠️  video_height为空，跳过过滤")
+        return all_texts, []
+    
+    # 计算底部1/3区域的y坐标阈值
+    bottom_third_threshold = video_height * (2.0 / 3.0)
+    
+    # 分离底部和上部的文本
+    bottom_texts = []
+    for text_info in all_texts:
+        center_y = text_info.get('center_y', 0)
+        if center_y >= bottom_third_threshold:
+            bottom_texts.append(text_info)
+    
+    # 只检查底部1/3区域的文本是否有干扰字幕
+    if not bottom_texts:
+        logger.warning("⚠️  底部1/3区域没有检测到文本，跳过干扰字幕过滤")
+        return all_texts, []
+    
+    # 只对底部1/3区域的文本进行干扰字幕检测
+    texts_to_check = bottom_texts
+    
+    # 获取总帧数
+    all_frame_nums = set(t['frame_num'] for t in all_texts)
+    total_frames = len(all_frame_nums)
+    
+    if total_frames == 0:
+        logger.warning("⚠️  总帧数为0，跳过过滤")
+        return all_texts, []
+    
+    # 计算最小出现帧数（50%以上）
+    min_occurrence_frames = max(1, int(total_frames * min_frequency_ratio))
+    
+    # 按文本内容相似度分组
+    text_groups = []
+    processed_indices = set()
+    
+    for i, text_info in enumerate(texts_to_check):
+        if i in processed_indices:
+            continue
+        
+        # 创建新组
+        group = [text_info]
+        processed_indices.add(i)
+        base_text = text_info['text']
+        
+        # 查找相似文本
+        for j, other_text_info in enumerate(texts_to_check[i+1:], start=i+1):
+            if j in processed_indices:
+                continue
+            
+            other_text = other_text_info['text']
+            similarity = calculate_text_similarity(base_text, other_text)
+            
+            if similarity >= similarity_threshold:
+                group.append(other_text_info)
+                processed_indices.add(j)
+                logger.info(f"   相似文本匹配: '{base_text}' ≈ '{other_text}' (相似度={similarity:.3f})")
+        
+        if len(group) > 0:
+            text_groups.append(group)
+    
+    # 找出满足出现频率要求的干扰字幕组
+    interference_groups = []
+    for group in text_groups:
+        # 统计该组文本出现在多少帧中
+        frame_nums = set(t['frame_num'] for t in group)
+        frame_count = len(frame_nums)
+        
+        if frame_count >= min_occurrence_frames:
+            # 这是一个干扰字幕组（经常重复的字幕）
+            sample_text = group[0]['text']
+            logger.info(f"检测到干扰字幕: '{sample_text}' (出现在 {frame_count}/{total_frames} 帧)")
+            interference_groups.append(group)
+    
+    # 过滤掉干扰文本
+    filtered_texts = []
+    interference_count = 0
+    
+    for text_info in all_texts:
+        # 检查是否与任何干扰组中的文本相似
+        is_interference = False
+        text_content = text_info.get('text', '')
+        
+        for interference_group in interference_groups:
+            for interference_text_info in interference_group:
+                similarity = calculate_text_similarity(
+                    text_content, 
+                    interference_text_info['text']
+                )
+                if similarity >= similarity_threshold:
+                    is_interference = True
+                    break
+            if is_interference:
+                break
+        
+        if is_interference:
+            interference_count += 1
+            continue
+        
+        filtered_texts.append(text_info)
+    
+    if interference_count > 0:
+        logger.info(f"已过滤 {interference_count} 个干扰字幕文本，剩余 {len(filtered_texts)} 个有效文本")
+    
+    return filtered_texts, interference_groups
+
+
 def extract_all_text_positions(all_results):
     """
     从所有帧的OCR结果中提取所有文本的位置信息（用于兜底方案）
@@ -277,15 +451,16 @@ def extract_all_text_positions(all_results):
     return all_texts
 
 
-def find_subtitle_cluster(all_texts, y_threshold=30, min_occurrences=3):
+def find_subtitle_cluster(all_texts, y_threshold=30, min_occurrences=3, video_height=None):
     """
     从所有文本中找出位置最相似的一组文本（字幕）
-    使用y坐标的相似度来聚类
+    使用y坐标的相似度来聚类，优先选择底部区域的文本
     
     Args:
         all_texts: 所有文本的位置信息列表
         y_threshold: y坐标差异阈值（像素），默认30
         min_occurrences: 字幕应该出现的最小次数，默认3
+        video_height: 视频高度（像素），如果提供，会优先选择底部区域的文本
     
     Returns:
         subtitle_texts: 识别为字幕的文本列表
@@ -306,18 +481,49 @@ def find_subtitle_cluster(all_texts, y_threshold=30, min_occurrences=3):
             y_groups[y_key] = []
         y_groups[y_key].append(text_info)
     
+    # 计算底部1/3区域阈值（如果提供了视频高度）
+    bottom_third_threshold = None
+    if video_height:
+        bottom_third_threshold = video_height * (2.0 / 3.0)
+    
     # 找出出现次数最多的组（字幕应该出现在大多数帧中）
+    # 优先选择底部区域的文本
     best_group = None
     best_count = 0
+    best_is_bottom = False
     
-    for y_key, texts in y_groups.items():
-        # 统计不同帧的数量（字幕应该在多帧中出现）
-        frame_nums = set(t['frame_num'] for t in texts)
-        frame_count = len(frame_nums)
-        
-        if frame_count >= min_occurrences and frame_count > best_count:
-            best_count = frame_count
-            best_group = texts
+    # 第一轮：优先查找底部区域的文本组
+    if bottom_third_threshold:
+        for y_key, texts in y_groups.items():
+            # 检查该组是否在底部区域
+            avg_y = sum(t['center_y'] for t in texts) / len(texts)
+            is_bottom = avg_y >= bottom_third_threshold
+            
+            # 统计不同帧的数量（字幕应该在多帧中出现）
+            frame_nums = set(t['frame_num'] for t in texts)
+            frame_count = len(frame_nums)
+            
+            # 优先选择底部区域的文本，且满足最小出现次数
+            if frame_count >= min_occurrences:
+                if is_bottom and (not best_is_bottom or frame_count > best_count):
+                    best_count = frame_count
+                    best_group = texts
+                    best_is_bottom = True
+                elif not best_is_bottom and frame_count > best_count:
+                    best_count = frame_count
+                    best_group = texts
+                    best_is_bottom = False
+    
+    # 如果没找到满足条件的底部文本，或者没有提供视频高度，使用原来的逻辑
+    if best_group is None:
+        for y_key, texts in y_groups.items():
+            # 统计不同帧的数量（字幕应该在多帧中出现）
+            frame_nums = set(t['frame_num'] for t in texts)
+            frame_count = len(frame_nums)
+            
+            if frame_count >= min_occurrences and frame_count > best_count:
+                best_count = frame_count
+                best_group = texts
     
     if best_group is None:
         # 如果没找到满足最小出现次数的，找出现次数最多的
@@ -343,6 +549,19 @@ def calculate_subtitle_statistics_fallback(all_results):
     """
     logger.info("使用兜底方案：从所有帧结果中识别字幕位置...")
     
+    # 获取视频高度（从第一帧图像中获取）
+    video_height = None
+    if all_results:
+        first_frame_result = all_results[0]
+        frame_image_path = first_frame_result.get('frame_image_path')
+        if frame_image_path and os.path.exists(frame_image_path):
+            try:
+                frame_image = cv2.imread(frame_image_path)
+                if frame_image is not None:
+                    video_height = frame_image.shape[0]
+            except Exception as e:
+                pass
+    
     # 提取所有文本位置
     all_texts = extract_all_text_positions(all_results)
     
@@ -350,16 +569,36 @@ def calculate_subtitle_statistics_fallback(all_results):
         logger.warning("未能提取到任何文本位置信息")
         return None
     
-    logger.info(f"共提取到 {len(all_texts)} 个文本位置")
+    # 过滤干扰字幕（如果获取到了视频高度）
+    interference_groups = []
+    if video_height:
+        all_texts, interference_groups = filter_interference_subtitles(
+            all_texts, 
+            video_height, 
+            similarity_threshold=0.85, 
+            min_frequency_ratio=0.5
+        )
     
-    # 找出字幕聚类
-    subtitle_texts = find_subtitle_cluster(all_texts, y_threshold=30, min_occurrences=3)
+    # 找出字幕聚类（传入视频高度以优先选择底部区域）
+    subtitle_texts = find_subtitle_cluster(all_texts, y_threshold=30, min_occurrences=3, video_height=video_height)
     
     if not subtitle_texts:
         logger.warning("未能找到位置相似的字幕文本")
         return None
     
-    logger.info(f"识别出 {len(subtitle_texts)} 个字幕文本（来自 {len(set(t['frame_num'] for t in subtitle_texts))} 帧）")
+    # 验证最终检测到的字幕不是干扰字幕
+    if interference_groups and subtitle_texts:
+        all_subtitle_texts = [t.get('text', '') for t in subtitle_texts]
+        for subtitle_text in all_subtitle_texts:
+            for interference_group in interference_groups:
+                for interference_text_info in interference_group:
+                    similarity = calculate_text_similarity(
+                        subtitle_text,
+                        interference_text_info['text']
+                    )
+                    if similarity >= 0.85:
+                        logger.warning(f"最终字幕位置是干扰字幕，返回None")
+                        return None
     
     # 计算统计信息
     center_x_list = []
