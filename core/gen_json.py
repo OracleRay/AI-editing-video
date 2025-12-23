@@ -67,13 +67,20 @@ def generate_audio_from_srt(srt_file, reference_audio, output_dir, model, speed,
     # 处理每条字幕
     success_count = 0
     failed_count = 0
+    total_count = len(subtitles)
     for file_index, subtitle in enumerate(subtitles, start=1):
+        # 预期的音频文件名（用于日志显示）
+        expected_filename = f"{file_index:04d}.mp3"
         try:
-            process_subtitle(subtitle, model, reference_audio_path, out_dir, speed, file_index, volume=volume)
+            logger.info(f"[{file_index}/{total_count}] 🔄 生成中: {expected_filename}")
+            out_path = process_subtitle(subtitle, model, reference_audio_path, out_dir, speed, file_index, volume=volume)
+            # 从返回的路径中提取实际的文件名
+            actual_filename = os.path.basename(out_path)
+            logger.info(f"[{file_index}/{total_count}] ✅ 成功: {actual_filename}")
             success_count += 1
         except Exception as e:
             failed_count += 1
-            logger.error(f"字幕 {subtitle['index']} 处理失败: {e}")
+            logger.error(f"[{file_index}/{total_count}] ❌ 失败: {expected_filename}")
     
     # 总结
     logger.info(f"音频生成完成: 成功 {success_count}/{len(subtitles)} 个")
@@ -512,9 +519,7 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
                         
                         # text_size 和 font_size 的关系大致是：font_size ≈ text_size / 6
                         calculated_font_size = max(1.0, min(20.0, calculated_text_size / 6.0))
-                        
-                        logger.info(f"   根据蒙版高度调整字幕: 原高度={detected_subtitle_height}px, "
-                                   f"新字幕大小={calculated_text_size}px, font_size={calculated_font_size:.1f}")
+
                     else:
                         # 如果没有检测到原字幕，使用默认值或根据视频尺寸判断
                         if aspect_ratio in ["9:16", "9:21"] or canvas_width < canvas_height:
@@ -543,8 +548,6 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
                         position_y=subtitle_position_y
                     )
                     text_segments.append(text_segment)
-
-                logger.info(f"   ✅ 添加了 {len(srt_clips)} 个字幕")
             
             # 在循环外创建字幕轨道（只创建一个轨道，包含所有字幕片段）
             if text_segments:
@@ -674,8 +677,6 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
     logger.info(f"剪映项目文件已生成: {output_abs_dir}")
     logger.info(f"视频片段: {len(video_segments)} 个 | 音频片段: {len(audio_segments)} 个 | 总时长: {total_duration / 1000000:.2f} 秒")
     logger.info(f"视频轨道数: {len(all_video_tracks)} | 音频轨道数: {len(audio_tracks)} | 字幕轨道数: {len(text_tracks)}")
-    if text_tracks and text_tracks[0]['segments']:
-        logger.info(f"字幕片段: {len(text_tracks[0]['segments'])} 个")
     logger.info(f"转场效果: {len(transition_materials)} 个")
 
 if __name__ == "__main__":
