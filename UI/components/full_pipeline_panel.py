@@ -59,7 +59,9 @@ class FullPipelinePanel(ttk.Frame):
         self.video_path = None
         self.video_paths = []  # 存储多个视频路径（文件夹模式）
         self.progress_line_start = None  # 记录进度行的起始位置
-        self.export_dir_var = tk.StringVar(value="")
+        # 设置默认剪映目录为桌面下的 "JianyingPro Drafts"
+        default_export_dir = str(Path.home() / "Desktop" / "JianyingPro Drafts")
+        self.export_dir_var = tk.StringVar(value=default_export_dir)
         self.clone_audio_path = None  # 克隆声音文件路径
         # BGM功能已改为从workspace/bgm文件夹随机选择，不再需要存储路径
         
@@ -306,9 +308,13 @@ class FullPipelinePanel(ttk.Frame):
         export_display_frame = ttk.Frame(export_frame)
         export_display_frame.pack(fill=tk.X)
         
+        # 初始化显示文本：如果默认目录存在则显示，否则显示"未选择"
+        default_dir = self.export_dir_var.get().strip()
+        initial_display_text = default_dir if default_dir and Path(default_dir).exists() else "未选择"
+        
         self.export_dir_display = tk.Label(
             export_display_frame,
-            text="未选择",
+            text=initial_display_text,
             font=("微软雅黑", 9),
             bg=self.COLORS['text_bg'],
             fg=self.COLORS['fg'],
@@ -445,6 +451,12 @@ class FullPipelinePanel(ttk.Frame):
         bgm_count = self._get_bgm_count()
         if bgm_count > 0:
             self._update_checklist('bgm', f"BGM库 ({bgm_count} 个文件)")
+        
+        # 初始化时检查默认导出目录
+        default_dir = self.export_dir_var.get().strip()
+        if default_dir and Path(default_dir).exists():
+            folder_name = Path(default_dir).name
+            self._update_checklist('export', folder_name)
     
     def _find_files_by_extensions(self, folder: Path, extensions: List[str]) -> List[Path]:
         """
@@ -633,23 +645,206 @@ class FullPipelinePanel(ttk.Frame):
                 self._log_result(f"\n⚠️ 文件夹中未找到视频文件: {folder_path}\n\n")
     
     def _select_clone_audio(self):
-        """选择克隆声音文件"""
-        file_path = filedialog.askopenfilename(
-            title="选择克隆声音文件",
-            filetypes=[
-                ("音频文件", "*.mp3 *.wav *.m4a *.flac *.aac"),
-                ("所有文件", "*.*")
-            ]
-        )
+        """选择克隆声音文件（弹出交互框）"""
+        self._show_clone_audio_choice()
+    
+    def _show_clone_audio_choice(self):
+        """
+        显示克隆声音选择对话框
+        可以选择已有的音频文件（从workspace/tts/）或选择新的音频文件
+        """
+        # 获取workspace/tts/目录
+        ttx_dir = get_workspace_path("tts")
+        ttx_dir.mkdir(parents=True, exist_ok=True)
         
-        if file_path:
-            self.clone_audio_path = file_path
-            # 显示文件名
-            filename = Path(file_path).name
+        # 查找已有的音频文件
+        existing_files = self._find_files_by_extensions(ttx_dir, self.AUDIO_EXTENSIONS)
+        existing_files = sorted(existing_files, key=lambda x: x.name)
+        
+        # 创建一个顶层窗口用于选择
+        choice_window = tk.Toplevel(self.winfo_toplevel())
+        choice_window.title("选择克隆声音")
+        choice_window.geometry("500x400")
+        choice_window.resizable(False, False)
+        
+        # 居中显示
+        choice_window.transient(self.winfo_toplevel())
+        choice_window.grab_set()
+        
+        # 设置窗口位置居中
+        choice_window.update_idletasks()
+        x = (choice_window.winfo_screenwidth() - choice_window.winfo_width()) // 2
+        y = (choice_window.winfo_screenheight() - choice_window.winfo_height()) // 2
+        choice_window.geometry(f"+{x}+{y}")
+        
+        # 主容器
+        main_frame = ttk.Frame(choice_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 提示文本
+        prompt_label = ttk.Label(
+            main_frame,
+            text="请选择克隆声音文件：",
+            font=("微软雅黑", 11, "bold")
+        )
+        prompt_label.pack(anchor=tk.W, pady=(0, 10))
+        
+        # 用于存储选择的文件路径（使用列表以便在闭包中修改）
+        selected_file = [None]
+        
+        # 已有文件区域
+        if existing_files:
+            existing_frame = ttk.LabelFrame(main_frame, text=f" 已有音频文件 ({len(existing_files)} 个) ", padding=10)
+            existing_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+            
+            # 创建滚动区域
+            canvas_frame = tk.Frame(existing_frame)
+            canvas_frame.pack(fill=tk.BOTH, expand=True)
+            
+            # 创建Canvas和Scrollbar
+            list_canvas = tk.Canvas(
+                canvas_frame,
+                bg=self.COLORS['panel_bg'],
+                highlightthickness=0,
+                relief=tk.FLAT,
+                height=200
+            )
+            scrollbar = ttk.Scrollbar(
+                canvas_frame,
+                orient=tk.VERTICAL,
+                command=list_canvas.yview
+            )
+            
+            # 创建可滚动的Frame
+            list_frame = ttk.Frame(list_canvas)
+            list_frame_id = list_canvas.create_window((0, 0), window=list_frame, anchor='nw')
+            
+            # 配置Canvas滚动
+            def configure_scroll_region(event):
+                list_canvas.configure(scrollregion=list_canvas.bbox('all'))
+            
+            def configure_canvas_width(event):
+                canvas_width = event.width
+                list_canvas.itemconfig(list_frame_id, width=canvas_width)
+            
+            list_frame.bind('<Configure>', configure_scroll_region)
+            list_canvas.bind('<Configure>', configure_canvas_width)
+            
+            # 鼠标滚轮支持
+            def on_mousewheel(event):
+                if list_canvas.winfo_containing(event.x_root, event.y_root):
+                    list_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            
+            list_canvas.bind("<MouseWheel>", on_mousewheel)
+            list_frame.bind("<MouseWheel>", on_mousewheel)
+            
+            # 布局Canvas和Scrollbar
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            list_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            list_canvas.configure(yscrollcommand=scrollbar.set)
+            
+            # 添加文件列表
+            def select_existing_file(file_path: Path):
+                """选择已有文件"""
+                selected_file[0] = str(file_path)
+                choice_window.destroy()
+            
+            for audio_file in existing_files:
+                file_frame = ttk.Frame(list_frame)
+                file_frame.pack(fill=tk.X, pady=2)
+                
+                # 文件名按钮
+                file_btn = ttk.Button(
+                    file_frame,
+                    text=audio_file.name,
+                    command=lambda f=audio_file: select_existing_file(f),
+                    style='TButton'
+                )
+                file_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+                
+                # 文件大小标签
+                try:
+                    file_size = self._get_file_size(str(audio_file))
+                    size_label = ttk.Label(
+                        file_frame,
+                        text=file_size,
+                        font=("微软雅黑", 8),
+                        foreground=self.COLORS['text_gray']
+                    )
+                    size_label.pack(side=tk.RIGHT)
+                except:
+                    pass
+        else:
+            # 没有已有文件时的提示
+            no_files_label = ttk.Label(
+                main_frame,
+                text="暂无已有音频文件",
+                font=("微软雅黑", 9),
+                foreground=self.COLORS['text_gray']
+            )
+            no_files_label.pack(fill=tk.X, pady=(0, 10))
+        
+        # 按钮区域
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        def select_new_file():
+            """选择新的音频文件"""
+            file_path = filedialog.askopenfilename(
+                title="选择新的克隆声音文件",
+                filetypes=[
+                    ("音频文件", "*.mp3 *.wav *.m4a *.flac *.aac"),
+                    ("所有文件", "*.*")
+                ]
+            )
+            
+            if file_path:
+                try:
+                    source_file = Path(file_path)
+                    if not source_file.exists():
+                        show_error_message(choice_window, "文件不存在")
+                        return
+                    
+                    # 复制文件到workspace/ttx/（自动处理重命名）
+                    target_path = self._copy_file_with_rename(source_file, ttx_dir)
+                    
+                    # 设置选择的文件路径
+                    selected_file[0] = str(target_path)
+                    choice_window.destroy()
+                except Exception as e:
+                    error_msg = f"保存文件失败: {str(e)}"
+                    show_error_message(choice_window, error_msg)
+        
+        # 选择新文件按钮
+        new_file_btn = ttk.Button(
+            button_frame,
+            text="📁 选择新音频文件",
+            command=select_new_file,
+            style='TButton',
+            width=20
+        )
+        new_file_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 取消按钮
+        cancel_btn = ttk.Button(
+            button_frame,
+            text="取消",
+            command=choice_window.destroy,
+            width=10
+        )
+        cancel_btn.pack(side=tk.RIGHT)
+        
+        # 等待窗口关闭
+        choice_window.wait_window()
+        
+        # 处理选择的文件
+        if selected_file[0]:
+            self.clone_audio_path = selected_file[0]
+            filename = Path(selected_file[0]).name
             # 更新任务清单
             self._update_checklist('audio', filename)
             self._log_result(f"\n✅ 已选择克隆声音: {filename}\n")
-            self._log_result(f"   路径: {file_path}\n\n")
+            self._log_result(f"   路径: {selected_file[0]}\n\n")
     
     def _add_bgm(self):
         """添加BGM文件或文件夹到workspace/bgm文件夹（弹出选择对话框）"""
@@ -1054,10 +1249,17 @@ class FullPipelinePanel(ttk.Frame):
     
     def _select_export_dir(self):
         """选择导出目录"""
-        initial_dir = self.export_dir_var.get().strip() or str((Path.home() / "Desktop"))
+        # 如果当前值为空，使用默认值（桌面下的 "JianyingPro Drafts"）
+        current_dir = self.export_dir_var.get().strip()
+        if not current_dir:
+            default_dir = str(Path.home() / "Desktop" / "JianyingPro Drafts")
+            initial_dir = default_dir
+        else:
+            initial_dir = current_dir
+        
         selected = filedialog.askdirectory(
             title="选择剪映导出目录",
-            initialdir=initial_dir if Path(initial_dir).exists() else None
+            initialdir=initial_dir if Path(initial_dir).exists() else str(Path.home() / "Desktop")
         )
         if selected:
             self.export_dir_var.set(selected)
