@@ -349,7 +349,7 @@ def step9_generate_capcut_project(
     # 处理BGM（如果提供）
     processed_bgm_path = None
     if bgm_path and bgm_volume is not None:
-        from utils.audio_processor import adjust_bgm_for_video
+        from utils.audio_handler.audio_processor import adjust_bgm_for_video
         from core.video_editing import get_video_duration
         
         logger.info("🎵 开始处理BGM...")
