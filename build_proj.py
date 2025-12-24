@@ -58,6 +58,12 @@ def main():
         "--include-data-dir=" + str(project_root / "resources") + "=resources",
         "--output-dir=" + str(dist_dir),
         "--output-filename=AI剪辑工具.exe",
+        # 添加版本信息，有助于减少杀毒软件误报
+        "--windows-company-name=AI视频处理工具",
+        "--windows-product-name=AI剪辑工具",
+        "--windows-file-version=1.0.0.0",
+        "--windows-product-version=1.0.0.0",
+        "--windows-file-description=AI智能视频剪辑工具",
     ]
     
     if icon_path.exists():
