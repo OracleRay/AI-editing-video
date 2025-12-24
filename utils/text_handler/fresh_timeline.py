@@ -90,9 +90,8 @@ def fresh_timeline(input_srt_path, output_srt_path):
     
     logger.info(f"[完成] 字幕时间轴已刷新")
     logger.info(f"[输入] {input_srt_path}")
-    logger.info(f"[输出] {output_srt_path}")
     logger.info(f"[统计] 共处理 {len(new_subtitles)} 条字幕")
-    logger.info(f"[时长] 新视频总时长: {format_srt_time(current_time)}")
+    logger.info(f"[时长] 预计新视频总时长: {format_srt_time(current_time)}")
 
 
 if __name__ == "__main__":
