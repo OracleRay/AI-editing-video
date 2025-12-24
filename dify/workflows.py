@@ -30,7 +30,7 @@ def run_commentary_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
         text_content = inputs["short_copy"]
         
         # 统一换行符为 \r\n（Windows 格式）
-        text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
+        text_content = text_content.replace('\r\n', '\n')
         
         # 上传文件
         file_info = client.upload_file(text_content, filename="short_copy.txt")
@@ -72,7 +72,7 @@ def run_editing_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
         
         # 统一换行符为 \r\n（Windows 格式）
         # 先将所有 \r\n 转换为 \n，然后统一转换为 \r\n
-        text_content = text_content.replace('\r\n', '\n').replace('\n', '\r\n')
+        text_content = text_content.replace('\r\n', '\n')
         
         # 上传文件
         file_info = client.upload_file(text_content, filename="input_lines.txt")
@@ -89,3 +89,57 @@ def run_editing_workflow(inputs: Dict[str, Any]) -> Dict[str, Any]:
     
     return result
 
+
+def run_typo_workflow(merged_srt_file: str, commentary_txt_file: str = None) -> Dict[str, Any]:
+    """
+    运行错别字修正工作流（typo_correct）
+    
+    将合并后的SRT文件和解说工作流输出的txt文件上传到Dify工作流进行错别字修正处理
+    
+    Args:
+        merged_srt_file: 合并后的SRT文件路径（merge.txt）
+        commentary_txt_file: 解说工作流输出的txt文件路径（可选）
+    
+    Returns:
+        工作流返回的结果字典
+    
+    Examples:
+        >>> from dify.workflows import run_typo_workflow
+        >>> result = run_typo_workflow("merge.txt", "commentary.txt")
+        >>> print(result["text"])
+    """
+    # 创建 typo_correct 工作流客户端
+    client = create_dify_client("typo_correct")
+    
+    # 读取合并后的SRT文件内容
+    with open(merged_srt_file, "r", encoding="utf-8") as f:
+        srt_content = f.read()
+    with open(commentary_txt_file, "r", encoding="utf-8") as f:
+        commentary_content = f.read()
+    
+    # 统一换行符为 \r\n（Windows 格式）
+    srt_content = srt_content.replace('\r\n', '\n')
+    commentary_content = commentary_content.replace('\r\n', '\n')
+
+    # 上传SRT文件到Dify
+    file_info = client.upload_file(srt_content, filename="merged_srt.txt")
+    commentary_file_info = client.upload_file(commentary_content, filename="commentary.txt")
+    
+    # 构建输入参数字典
+    inputs = {
+        "asr_srt_file": {
+            "type": "document",
+            "transfer_method": "local_file", 
+            "upload_file_id": file_info["id"]
+        },
+        "source_srt_file": {
+            "type": "document",
+            "transfer_method": "local_file",
+            "upload_file_id": commentary_file_info["id"]
+        }
+    }
+    
+    # 调用工作流并返回结果字典
+    result = client.run_workflow(inputs)
+    
+    return result

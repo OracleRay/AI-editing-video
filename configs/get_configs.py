@@ -93,15 +93,16 @@ def get_config_content():
     """
     # 从环境变量获取，如果没有则使用默认值（示例值，实际使用时需要配置）
     api_url = 'http://172.17.3.115:3903/api/get'
-    api_key = 'eRJv4EHncPpUjdXdJMs8'
-    
+    # api_key = 'eRJv4EHncPpUjdXdJMs8'
+    api_key = 'EWnkpBhRfDCPxCvapNWX'
+
     return get_file(api_url, api_key)
 
 
 if __name__ == '__main__':
     # 示例使用
     API_URL = 'http://172.17.3.115:3903/api/get'
-    KEY = 'eRJv4EHncPpUjdXdJMs8'
+    KEY = 'EWnkpBhRfDCPxCvapNWX'
 
     try:
         content = get_file(API_URL, KEY)

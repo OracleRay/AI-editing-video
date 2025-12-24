@@ -1,4 +1,3 @@
-from datetime import datetime
 import json
 import re
 import os
@@ -11,11 +10,14 @@ from pathlib import Path
 # 添加utils目录到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from services.tts_client import parse_srt as tts_parse_srt, process_subtitle, ensure_output_dir
-from utils.config_loader import get_config, get_resources_path, get_workspace_path
+from utils.config_loader import get_config, get_workspace_path
 from utils.meta_json import *
 from utils.loggers import get_logger
 from utils.subtitle_detector import detect_subtitle_position
-from utils.gen_jieShuo_srt import batch_convert_mp3_to_srt
+from utils.text_handler.text_to_srt import text_to_srt
+from dify.workflows import run_typo_workflow
+from services.audio_to_subtitles import transcribe_audio, create_srt, API_URL, API_KEY
+from utils.audio_handler.concat_audio import concat_audio_files
 
 # === 加载配置 ===
 config = get_config()
@@ -201,7 +203,7 @@ def get_aspect_ratio_name(ratio):
 
 # === 生成项目文件 ===
 def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
-                            ocr_confidence=0.4, audio_dir=None, subtitle_dir=None, bgm_path=None):
+                            ocr_confidence=0.4, audio_dir=None, subtitle_dir=None, bgm_path=None, commentary_txt_file=None):
     """
     生成剪映项目文件
     
@@ -212,8 +214,9 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
         output_dir: 输出目录
         enable_subtitle_mask: 是否启用字幕蒙版（模糊效果）
         ocr_confidence: OCR置信度阈值（0.0-1.0），默认0.5
-        audio_dir: 包含多个音频文件的目录（可选），会自动转换为字幕并添加到项目中
-        subtitle_dir: 字幕输出基础目录（可选），传递给 batch_convert_mp3_to_srt 作为 output_base_dir
+        audio_dir: 包含多个音频文件的目录（可选），会自动合并音频并转换为字幕添加到项目中
+        subtitle_dir: 字幕输出基础目录（可选），用于保存合并后的音频和字幕文件
+        commentary_txt_file: 解说工作流输出的txt文件路径（可选），用于错别字修正工作流
     """
     # 将相对路径转换为绝对路径
     srt_abs_path = config.get_absolute_path(srt_file)
@@ -395,29 +398,49 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
     
     # === 添加BGM轨道（如果提供）===
     if bgm_path and os.path.exists(bgm_path):
-        logger.info(f"🎵 添加BGM轨道: {bgm_path}")
+        bgm_files = []
         
-        # 获取BGM文件的时长
-        bgm_duration = get_audio_duration(bgm_path)
-        if bgm_duration:
-            bgm_mat_id = gen_id()
-            
-            # 计算BGM在剪映中的实际播放时长（不超过视频总时长）
-            # total_duration 是视频的最终总时长，BGM应该匹配这个时长
-            bgm_play_duration = min(bgm_duration, total_duration)
-            
-            logger.info(f"   BGM文件时长: {bgm_duration/1000000:.2f}秒")
-            logger.info(f"   视频总时长: {total_duration/1000000:.2f}秒")
-            logger.info(f"   BGM播放时长: {bgm_play_duration/1000000:.2f}秒")
-            
-            # 创建BGM素材（使用文件原始时长）
-            bgm_material = create_bgm_material(bgm_mat_id, bgm_path, bgm_duration)
-            audio_materials.append(bgm_material)
-            
-            # 创建BGM轨道和片段（使用裁剪后的时长）
-            bgm_track, bgm_segment = create_bgm_track(bgm_mat_id, bgm_play_duration)
-            audio_tracks.append(bgm_track)
-            logger.info(f"✅ BGM轨道已添加（已裁剪至视频长度）")
+        # 判断是文件还是文件夹
+        if os.path.isfile(bgm_path):
+            # 单个文件
+            bgm_files.append(bgm_path)
+            logger.info(f"🎵 添加BGM文件: {bgm_path}")
+        elif os.path.isdir(bgm_path):
+            # 文件夹，查找所有音频文件
+            logger.info(f"🎵 添加BGM文件夹: {bgm_path}")
+            audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
+            for ext in audio_extensions:
+                bgm_files.extend(Path(bgm_path).glob(f'*{ext}'))
+                bgm_files.extend(Path(bgm_path).glob(f'*{ext.upper()}'))
+            # 去重并转换为字符串
+            bgm_files = [str(f) for f in set(bgm_files)]
+            logger.info(f"   找到 {len(bgm_files)} 个音频文件")
+        
+        # 处理每个BGM文件
+        for bgm_file in bgm_files:
+            # 获取BGM文件的时长
+            bgm_duration = get_audio_duration(bgm_file)
+            if bgm_duration:
+                bgm_mat_id = gen_id()
+                
+                # 计算BGM在剪映中的实际播放时长（不超过视频总时长）
+                # total_duration 是视频的最终总时长，BGM应该匹配这个时长
+                bgm_play_duration = min(bgm_duration, total_duration)
+                
+                logger.info(f"   BGM文件: {os.path.basename(bgm_file)}")
+                logger.info(f"   文件时长: {bgm_duration/1000000:.2f}秒")
+                logger.info(f"   播放时长: {bgm_play_duration/1000000:.2f}秒")
+                
+                # 创建BGM素材（使用文件原始时长）
+                bgm_material = create_bgm_material(bgm_mat_id, bgm_file, bgm_duration)
+                audio_materials.append(bgm_material)
+                
+                # 创建BGM轨道和片段（使用裁剪后的时长）
+                bgm_track, bgm_segment = create_bgm_track(bgm_mat_id, bgm_play_duration)
+                audio_tracks.append(bgm_track)
+        
+        if bgm_files:
+            logger.info(f"✅ 已添加 {len(bgm_files)} 个BGM轨道（已裁剪至视频长度）")
     
     # === 获取视频真实尺寸 ===
     canvas_width, canvas_height, aspect_ratio = get_video_dimensions(video_abs_path)
@@ -465,106 +488,153 @@ def generate_capcut_project(video_file, audio_pattern, srt_file, output_dir,
     
     if audio_dir:
         try:
-            subtitle_output_dir = batch_convert_mp3_to_srt(audio_dir, subtitle_dir)
+            logger.info("=" * 60)
+            logger.info("🎵 开始处理音频转字幕流程")
 
-            subtitle_path = Path(subtitle_output_dir)
-            srt_files = sorted([str(f) for f in subtitle_path.glob("*.srt")])
+            # 确定输出目录
+            if subtitle_dir is None:
+                subtitle_output_dir = get_workspace_path("srt_files/subtitles")
+            else:
+                subtitle_output_dir = Path(subtitle_dir)
             
-            # 解析字幕文件并创建字幕片段
-            text_segments = []
-            logger.info("")
-
-            for idx, (target_start, target_end, source_start, source_end) in enumerate(audio_video_mapping):
-                # 每个音频片段对应一个字幕文件
-                if idx >= len(srt_files):
-                    logger.warning(f"⚠️  音频片段 [{idx+1}] 没有对应的字幕文件")
-                    break
-
-                srt_file_path = srt_files[idx]
-                logger.info(f"📄 [{idx+1}/{len(audio_video_mapping)}] {Path(srt_file_path).name}")
-
-                # 解析字幕文件
-                srt_clips = parse_srt(srt_file_path)
-
-                if not srt_clips:
-                    logger.warning(f"   ⚠️  字幕文件为空，跳过")
-                    continue
-
-                # 为每个字幕行创建材料和片段
-                for sub_start, sub_end, sub_text in srt_clips:
-                    text_id = gen_id()
-
-                    # 计算字幕在时间轴上的位置（相对于当前音频片段）
-                    subtitle_start = target_start + sub_start
-                    subtitle_duration = sub_end - sub_start
-
-                    # 确保字幕不超出音频片段范围
-                    if subtitle_start + subtitle_duration > target_end:
-                        subtitle_duration = target_end - subtitle_start
-
-                    if subtitle_duration <= 0:
-                        continue
-
-                    # 根据蒙版高度动态调整字幕大小
-                    # 如果检测到了原字幕位置，使用其高度来匹配新字幕大小
-                    if subtitle_position and 'height' in subtitle_position:
-                        # 获取检测到的原字幕高度（像素）
-                        detected_subtitle_height = subtitle_position['height']
-                        
-                        size_ratio = 0.85
-                        calculated_text_size = int(detected_subtitle_height * size_ratio)
-                        
-                        # 限制在合理范围内（10-100像素）
-                        calculated_text_size = max(10, min(100, calculated_text_size))
-                        
-                        # text_size 和 font_size 的关系大致是：font_size ≈ text_size / 6
-                        calculated_font_size = max(1.0, min(20.0, calculated_text_size / 6.0))
-
-                    else:
-                        # 如果没有检测到原字幕，使用默认值或根据视频尺寸判断
-                        if aspect_ratio in ["9:16", "9:21"] or canvas_width < canvas_height:
-                            # 竖屏视频：使用更大的默认字体
-                            calculated_font_size = 6.0
-                            calculated_text_size = 45
-                        else:
-                            # 横屏视频：使用默认字体
-                            calculated_font_size = 5.0
-                            calculated_text_size = 30
-
-                    # 创建字幕材料
-                    text_material = create_text_material(
-                        text_id=text_id,
-                        text_content=sub_text.strip(),
-                        font_size=calculated_font_size,
-                        text_size=calculated_text_size
-                    )
-                    text_materials.append(text_material)
-
-                    # 创建字幕片段（使用检测到的位置）
-                    text_segment = create_text_segment(
-                        text_id=text_id,
-                        start_time=subtitle_start,
-                        duration=subtitle_duration,
-                        position_y=subtitle_position_y
-                    )
-                    text_segments.append(text_segment)
+            # 创建与音频文件夹同名的子目录
+            audio_path = Path(audio_dir)
+            folder_name = audio_path.name
+            subtitle_output_dir = subtitle_output_dir / folder_name
+            subtitle_output_dir.mkdir(parents=True, exist_ok=True)
             
-            # 在循环外创建字幕轨道（只创建一个轨道，包含所有字幕片段）
-            if text_segments:
-                text_track = {
-                    "attribute": 0,
-                    "flag": 0,
-                    "id": gen_id(),
-                    "is_default_name": True,
-                    "name": "",
-                    "segments": text_segments,
-                    "type": "text"
-                }
-                text_tracks.append(text_track)
+            logger.info(f"📁 字幕输出目录: {subtitle_output_dir}")
+            
+            # 获取所有音频文件并排序
+            audio_path_obj = Path(audio_dir)
+            if not audio_path_obj.exists():
+                raise FileNotFoundError(f"音频目录不存在: {audio_dir}")
+            
+            mp3_files = sorted(audio_path_obj.glob("*.mp3"))
+            
+            if not mp3_files:
+                logger.warning("⚠️  音频目录中没有找到mp3文件，跳过字幕处理")
+            else:
+                logger.info(f"   找到 {len(mp3_files)} 个音频文件")
+                
                 logger.info("")
-                logger.info(f"✅ 字幕轨道创建成功")
-                logger.info(f"   总字幕数: {len(text_segments)}")
-                logger.info(f"   字幕材料数: {len(text_materials)}")
+                logger.info("🔄 合并音频文件...")
+                merged_audio_file = str(subtitle_output_dir / "merged_audio.mp3")
+                audio_file_list = [str(f) for f in mp3_files]
+                
+                if not concat_audio_files(audio_file_list, merged_audio_file):
+                    raise RuntimeError("音频合并失败")
+                
+                logger.info(f"✅ 音频合并完成: {merged_audio_file}")
+                
+                logger.info("")
+                logger.info("🔄 将合并音频转为字幕（ASR）...")
+                merged_srt_file = str(subtitle_output_dir / "merged_audio.txt")
+                
+                # 检查字幕文件是否已存在
+                if os.path.exists(merged_srt_file):
+                    logger.info(f"⏭️  字幕文件已存在，跳过转换: {merged_srt_file}")
+                else:
+                    # 调用API转录音频
+                    transcription_result = transcribe_audio(merged_audio_file, API_URL, API_KEY)
+                    # 生成SRT文件
+                    create_srt(transcription_result, merged_srt_file)
+                    logger.info(f"✅ 音频转字幕完成: {merged_srt_file}")
+                
+                # 步骤3: 将字幕传给dify进行错别字修正
+                logger.info("")
+                logger.info("🔄 将字幕传给Dify进行错别字修正...")
+                workflow_result = run_typo_workflow(merged_srt_file, commentary_txt_file=commentary_txt_file)
+                processed_srt_text = workflow_result.get("text", "")
+                
+                if not processed_srt_text:
+                    logger.warning("⚠️  工作流返回结果为空，使用原始字幕文件")
+                    # 如果工作流返回空，直接使用原始字幕文件
+                    with open(merged_srt_file, "r", encoding="utf-8") as f:
+                        processed_srt_text = f.read()
+
+                final_srt_file = text_to_srt(processed_srt_text, output_dir=str(subtitle_output_dir))
+                logger.info(f"✅ 修改错别字后的SRT文件: {final_srt_file}")
+                
+                # 解析最终的SRT文件
+                srt_clips = parse_srt(final_srt_file)
+                
+                if not srt_clips:
+                    logger.warning("⚠️  最终SRT文件为空，跳过字幕创建")
+                else:
+                    # 解析字幕文件并创建字幕片段
+                    text_segments = []
+                    
+                    # 为每个字幕行创建材料和片段
+                    for sub_start, sub_end, sub_text in srt_clips:
+                        text_id = gen_id()
+                        
+                        # 字幕时间戳已经是累加后的，直接使用（转换为微秒）
+                        subtitle_start = sub_start  # 已经是微秒
+                        subtitle_duration = sub_end - sub_start
+                        
+                        if subtitle_duration <= 0:
+                            continue
+                        
+                        # 根据蒙版高度动态调整字幕大小
+                        # 如果检测到了原字幕位置，使用其高度来匹配新字幕大小
+                        if subtitle_position and 'height' in subtitle_position:
+                            # 获取检测到的原字幕高度（像素）
+                            detected_subtitle_height = subtitle_position['height']
+                            
+                            size_ratio = 0.70
+                            calculated_text_size = int(detected_subtitle_height * size_ratio)
+                            
+                            # 限制在合理范围内（10-100像素）
+                            calculated_text_size = max(10, min(100, calculated_text_size))
+                            
+                            calculated_font_size = max(1.0, min(20.0, calculated_text_size / 7.0))
+                        
+                        else:
+                            # 如果没有检测到原字幕，使用默认值或根据视频尺寸判断
+                            if aspect_ratio in ["9:16", "9:21"] or canvas_width < canvas_height:
+                                # 竖屏视频：使用更大的默认字体
+                                calculated_font_size = 6.0
+                                calculated_text_size = 45
+                            else:
+                                # 横屏视频：使用默认字体
+                                calculated_font_size = 5.0
+                                calculated_text_size = 30
+                        
+                        # 创建字幕材料
+                        text_material = create_text_material(
+                            text_id=text_id,
+                            text_content=sub_text.strip(),
+                            font_size=calculated_font_size,
+                            text_size=calculated_text_size
+                        )
+                        text_materials.append(text_material)
+                        
+                        # 创建字幕片段（使用检测到的位置）
+                        text_segment = create_text_segment(
+                            text_id=text_id,
+                            start_time=subtitle_start,
+                            duration=subtitle_duration,
+                            position_y=subtitle_position_y
+                        )
+                        text_segments.append(text_segment)
+                    
+                    # 创建字幕轨道（只创建一个轨道，包含所有字幕片段）
+                    if text_segments:
+                        text_track = {
+                            "attribute": 0,
+                            "flag": 0,
+                            "id": gen_id(),
+                            "is_default_name": True,
+                            "name": "",
+                            "segments": text_segments,
+                            "type": "text"
+                        }
+                        text_tracks.append(text_track)
+                        logger.info("")
+                        logger.info(f"✅ 字幕轨道创建成功")
+                        logger.info(f"   字幕材料数: {len(text_materials)}")
+                        logger.info("=" * 60)
                 
         except Exception as e:
             logger.error(f"字幕处理失败: {e}")

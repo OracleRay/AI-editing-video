@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import shutil
 import random
-from typing import Dict, Optional
+from typing import Optional, List
 
 # 添加项目根目录到路径（支持打包环境）
 def _get_base_path() -> Path:
@@ -48,6 +48,10 @@ class FullPipelinePanel(ttk.Frame):
         'accent': '#7FA1A6',
         'text_gray': '#8B8378'
     }
+    
+    # 文件扩展名常量
+    VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
+    AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
     
     def __init__(self, parent):
         super().__init__(parent)
@@ -442,8 +446,63 @@ class FullPipelinePanel(ttk.Frame):
         if bgm_count > 0:
             self._update_checklist('bgm', f"BGM库 ({bgm_count} 个文件)")
     
-    def _select_video_or_folder(self):
-        """选择视频文件或文件夹（弹出选择对话框）"""
+    def _find_files_by_extensions(self, folder: Path, extensions: List[str]) -> List[Path]:
+        """
+        在文件夹中查找指定扩展名的文件（不区分大小写）
+        
+        Args:
+            folder: 要搜索的文件夹路径
+            extensions: 文件扩展名列表（如 ['.mp3', '.wav']）
+        
+        Returns:
+            找到的文件路径列表（已去重）
+        """
+        files = []
+        for ext in extensions:
+            files.extend(folder.glob(f'*{ext}'))
+            files.extend(folder.glob(f'*{ext.upper()}'))
+        return list(set(files))
+    
+    def _copy_file_with_rename(self, source_file: Path, target_dir: Path) -> Path:
+        """
+        复制文件到目标目录，如果文件已存在则自动重命名
+        
+        Args:
+            source_file: 源文件路径
+            target_dir: 目标目录路径
+        
+        Returns:
+            实际保存的文件路径
+        """
+        filename = source_file.name
+        target_path = target_dir / filename
+        
+        # 如果目标文件已存在，添加序号避免覆盖
+        if target_path.exists():
+            base_name = source_file.stem
+            extension = source_file.suffix
+            counter = 1
+            while target_path.exists():
+                new_filename = f"{base_name}_{counter}{extension}"
+                target_path = target_dir / new_filename
+                counter += 1
+        
+        # 复制文件
+        shutil.copy2(str(source_file), target_path)
+        return target_path
+    
+    def _show_file_or_folder_choice(self, prompt_text, file_button_text, folder_button_text, 
+                                     file_callback, folder_callback):
+        """
+        显示文件或文件夹选择对话框（通用方法）
+        
+        Args:
+            prompt_text: 提示文本
+            file_button_text: 文件按钮文本
+            folder_button_text: 文件夹按钮文本
+            file_callback: 选择文件后的回调函数（无参数）
+            folder_callback: 选择文件夹后的回调函数（无参数）
+        """
         # 创建一个顶层窗口用于选择
         choice_window = tk.Toplevel(self.winfo_toplevel())
         choice_window.title("选择方式")
@@ -463,7 +522,7 @@ class FullPipelinePanel(ttk.Frame):
         # 提示文本
         label = ttk.Label(
             choice_window,
-            text="请选择您要处理的视频：",
+            text=prompt_text,
             font=("微软雅黑", 11),
             justify=tk.CENTER
         )
@@ -475,16 +534,16 @@ class FullPipelinePanel(ttk.Frame):
         
         def select_file():
             choice_window.destroy()
-            self._select_video()
+            file_callback()
         
         def select_folder():
             choice_window.destroy()
-            self._select_folder()
+            folder_callback()
         
         # 选择文件按钮
         file_btn = ttk.Button(
             button_frame,
-            text="🎬 选择单个文件",
+            text=file_button_text,
             command=select_file,
             width=15
         )
@@ -493,7 +552,7 @@ class FullPipelinePanel(ttk.Frame):
         # 选择文件夹按钮
         folder_btn = ttk.Button(
             button_frame,
-            text="📁 选择文件夹",
+            text=folder_button_text,
             command=select_folder,
             width=15
         )
@@ -501,6 +560,16 @@ class FullPipelinePanel(ttk.Frame):
         
         # 等待窗口关闭
         choice_window.wait_window()
+    
+    def _select_video_or_folder(self):
+        """选择视频文件或文件夹（弹出选择对话框）"""
+        self._show_file_or_folder_choice(
+            prompt_text="请选择您要处理的视频：",
+            file_button_text="🎬 选择单个文件",
+            folder_button_text="📁 选择文件夹",
+            file_callback=self._select_video,
+            folder_callback=self._select_folder
+        )
     
     def _select_video(self):
         """选择单个视频文件"""
@@ -536,14 +605,10 @@ class FullPipelinePanel(ttk.Frame):
         if folder_path:
             folder = Path(folder_path)
             # 查找所有视频文件
-            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
-            video_files = []
-            for ext in video_extensions:
-                video_files.extend(folder.glob(f'*{ext}'))
-                video_files.extend(folder.glob(f'*{ext.upper()}'))
+            video_files = self._find_files_by_extensions(folder, self.VIDEO_EXTENSIONS)
             
-            # 去重并排序
-            video_files = sorted(set(video_files), key=lambda x: x.name)
+            # 排序
+            video_files = sorted(video_files, key=lambda x: x.name)
             
             if video_files:
                 self.video_paths = [str(f) for f in video_files]
@@ -587,7 +652,17 @@ class FullPipelinePanel(ttk.Frame):
             self._log_result(f"   路径: {file_path}\n\n")
     
     def _add_bgm(self):
-        """添加BGM文件到workspace/bgm文件夹"""
+        """添加BGM文件或文件夹到workspace/bgm文件夹（弹出选择对话框）"""
+        self._show_file_or_folder_choice(
+            prompt_text="请选择要添加的BGM：",
+            file_button_text="🎵 选择单个文件",
+            folder_button_text="📁 选择文件夹",
+            file_callback=self._add_bgm_file,
+            folder_callback=self._add_bgm_folder
+        )
+    
+    def _add_bgm_file(self):
+        """选择单个BGM文件并添加到库"""
         file_path = filedialog.askopenfilename(
             title="选择要添加的BGM音频文件",
             filetypes=[
@@ -596,46 +671,75 @@ class FullPipelinePanel(ttk.Frame):
             ]
         )
         
-        if file_path:
-            try:
-                # 获取workspace/bgm文件夹路径
-                bgm_dir = get_workspace_path("bgm")
-                
-                # 确保文件夹存在
-                bgm_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 获取源文件名
-                source_file = Path(file_path)
-                filename = source_file.name
-                target_path = bgm_dir / filename
-                
-                # 如果目标文件已存在，询问是否覆盖
-                if target_path.exists():
-                    # 简单处理：如果文件已存在，添加序号
-                    base_name = source_file.stem
-                    extension = source_file.suffix
-                    counter = 1
-                    while target_path.exists():
-                        new_filename = f"{base_name}_{counter}{extension}"
-                        target_path = bgm_dir / new_filename
-                        counter += 1
-                    filename = new_filename
-                
-                # 复制文件到bgm文件夹
-                shutil.copy2(file_path, target_path)
-                
-                # 更新任务清单（显示BGM库中的文件数量）
-                bgm_count = self._get_bgm_count()
-                self._update_checklist('bgm', f"BGM库 ({bgm_count} 个文件)")
-                
-                # 记录日志
-                self._log_result(f"\n✅ 已添加BGM到库: {filename}\n")
-                self._log_result(f"   保存路径: {target_path}\n")
-                self._log_result(f"   BGM库中共有 {bgm_count} 个文件\n\n")
-            except Exception as e:
-                error_msg = f"添加BGM失败: {str(e)}"
-                self._log_result(f"\n❌ {error_msg}\n\n")
-                show_error_message(self.winfo_toplevel(), error_msg)
+        if not file_path:
+            return
+        
+        try:
+            source_file = Path(file_path)
+            if not source_file.exists():
+                return
+            
+            # 获取workspace/bgm文件夹路径
+            bgm_dir = get_workspace_path("bgm")
+            bgm_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 复制文件（自动处理重命名）
+            target_path = self._copy_file_with_rename(source_file, bgm_dir)
+            
+            # 更新任务清单（显示BGM库中的文件数量）
+            bgm_count = self._get_bgm_count()
+            self._update_checklist('bgm', f"BGM库 ({bgm_count} 个文件)")
+            
+            # 记录日志
+            self._log_result(f"\n✅ 已添加BGM到库: {target_path.name}\n")
+            self._log_result(f"   保存路径: {target_path}\n")
+            self._log_result(f"   BGM库中共有 {bgm_count} 个文件\n\n")
+        except Exception as e:
+            error_msg = f"添加BGM失败: {str(e)}"
+            self._log_result(f"\n❌ {error_msg}\n\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
+    
+    def _add_bgm_folder(self):
+        """选择BGM文件夹并添加所有音频文件到库"""
+        folder_path = filedialog.askdirectory(
+            title="选择包含BGM音频文件的文件夹"
+        )
+        
+        if not folder_path:
+            return
+        
+        try:
+            folder = Path(folder_path)
+            # 查找所有音频文件
+            audio_files = self._find_files_by_extensions(folder, self.AUDIO_EXTENSIONS)
+            
+            if not audio_files:
+                self._log_result(f"\n⚠️  文件夹中未找到音频文件\n\n")
+                return
+            
+            # 获取workspace/bgm文件夹路径
+            bgm_dir = get_workspace_path("bgm")
+            bgm_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 处理每个音频文件
+            added_count = 0
+            for source_file in audio_files:
+                if source_file.exists():
+                    self._copy_file_with_rename(source_file, bgm_dir)
+                    added_count += 1
+            
+            # 更新任务清单（显示BGM库中的文件数量）
+            bgm_count = self._get_bgm_count()
+            self._update_checklist('bgm', f"BGM库 ({bgm_count} 个文件)")
+            
+            # 记录日志
+            self._log_result(f"\n✅ 已添加 {added_count} 个BGM文件到库\n")
+            self._log_result(f"   来源: {folder_path}\n")
+            self._log_result(f"   BGM库中共有 {bgm_count} 个文件\n\n")
+        except Exception as e:
+            error_msg = f"添加BGM失败: {str(e)}"
+            self._log_result(f"\n❌ {error_msg}\n\n")
+            show_error_message(self.winfo_toplevel(), error_msg)
     
     def _get_bgm_count(self) -> int:
         """获取BGM库中的文件数量"""
@@ -644,13 +748,8 @@ class FullPipelinePanel(ttk.Frame):
             if not bgm_dir.exists():
                 return 0
             
-            audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
-            audio_files = []
-            for ext in audio_extensions:
-                audio_files.extend(bgm_dir.glob(f'*{ext}'))
-                audio_files.extend(bgm_dir.glob(f'*{ext.upper()}'))
-            
-            return len(set(audio_files))
+            audio_files = self._find_files_by_extensions(bgm_dir, self.AUDIO_EXTENSIONS)
+            return len(audio_files)
         except:
             return 0
     
@@ -667,14 +766,7 @@ class FullPipelinePanel(ttk.Frame):
                 return None
             
             # 查找所有音频文件
-            audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
-            audio_files = []
-            for ext in audio_extensions:
-                audio_files.extend(bgm_dir.glob(f'*{ext}'))
-                audio_files.extend(bgm_dir.glob(f'*{ext.upper()}'))
-            
-            # 去重
-            audio_files = list(set(audio_files))
+            audio_files = self._find_files_by_extensions(bgm_dir, self.AUDIO_EXTENSIONS)
             
             if audio_files:
                 selected = random.choice(audio_files)

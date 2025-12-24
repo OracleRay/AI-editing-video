@@ -7,13 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dify.workflows import run_editing_workflow, run_commentary_workflow
-from utils.text_to_srt import text_to_srt
+from utils.text_handler.text_to_srt import text_to_srt
 from core.video_editing import edit_video
 from core.gen_json import generate_capcut_project, generate_audio_from_srt
 from utils.config_loader import get_config, get_workspace_path
 from services.video_to_audio import convert_video_to_audio
 from services.audio_to_subtitles import transcribe_audio, create_srt
-from utils.fresh_timeline import fresh_timeline
+from utils.text_handler.fresh_timeline import fresh_timeline
 from utils.loggers import get_logger
 from utils.jianying_drafts import copy_project_to_directory
 
@@ -313,8 +313,6 @@ def step9_generate_capcut_project(
     
     # 获取音频配置
     audio_pattern = config.get('audio.pattern')
-    audio_output_dir = config.get('audio.output_dir')
-    output_json_dir = config.get('output.json_dir')
     tts_model = config.get('tts.model')
     
     # 如果没有传入参数，从配置文件读取（兼容旧代码）
@@ -388,7 +386,8 @@ def step9_generate_capcut_project(
         ocr_confidence=0.4,
         audio_dir=audio_abs_dir,  # 自动为音频生成字幕并添加到项目中
         subtitle_dir=str(get_workspace_path("srt_files/subtitles")),
-        bgm_path=processed_bgm_path  # 传递处理后的BGM
+        bgm_path=processed_bgm_path,  # 传递处理后的BGM
+        commentary_txt_file=commentary_srt_file
     )
     logger.info(f"✅ 剪映项目生成完成: {json_run_dir}")
     
